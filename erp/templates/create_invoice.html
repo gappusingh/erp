@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-receipt"></i> Create New Invoice</h2>
+
+<div class="row">
+    <!-- Left: Cart and Invoice Form -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><i class="bi bi-cart"></i> Invoice Items</h4>
+                <a href="{{ url_for('main.clear_cart') }}" class="btn btn-sm btn-danger">
+                    <i class="bi bi-trash"></i> Clear Cart
+                </a>
+            </div>
+            <div class="card-body">
+                {% if cart %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Product</th>
+                                <th>SKU</th>
+                                <th class="text-center">Qty</th>
+                                <th class="text-end">Price</th>
+                                <th class="text-end">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set subtotal = 0 %}
+                            {% for item in cart %}
+                            {% set item_total = item.price * item.quantity %}
+                            {% set subtotal = subtotal + item_total %}
+                            <tr>
+                                <td>{{ item.name }}</td>
+                                <td><small class="text-muted">{{ item.sku }}</small></td>
+                                <td class="text-center">{{ item.quantity }}</td>
+                                <td class="text-end">₹{{ "%.2f"|format(item.price) }}</td>
+                                <td class="text-end fw-bold">₹{{ "%.2f"|format(item_total) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light">
+                                <td colspan="4" class="text-end fw-bold">Subtotal:</td>
+                                <td class="text-end fw-bold">₹{{ "%.2f"|format(subtotal) }}</td>
+                            </tr>
+                            <tr class="table-light">
+                                <td colspan="4" class="text-end">CGST (9%):</td>
+                                <td class="text-end">₹{{ "%.2f"|format(subtotal * 0.09) }}</td>
+                            </tr>
+                            <tr class="table-light">
+                                <td colspan="4" class="text-end">SGST (9%):</td>
+                                <td class="text-end">₹{{ "%.2f"|format(subtotal * 0.09) }}</td>
+                            </tr>
+                            <tr class="table-success">
+                                <td colspan="4" class="text-end fw-bold fs-5">Grand Total:</td>
+                                <td class="text-end fw-bold fs-5">₹{{ "%.2f"|format(subtotal * 1.18) }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info text-center">
+                    <i class="bi bi-cart-x"></i> Cart is empty. Add products from the right panel.
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="card-footer bg-light">
+               <form method="POST" action="{{ url_for('main.create_invoice') }}" target="_blank">
+                    <div class="mb-3">
+                        <label for="customer" class="form-label fw-bold">
+                            <i class="bi bi-person"></i> Select Customer *
+                        </label>
+                        <select name="customer" id="customer" class="form-select form-select-lg" required>
+                            <option value="">-- Choose a Customer --</option>
+                            {% for c in customers %}
+                            <option value="{{ c.id }}" 
+                                    {% if preselected_customer_id == c.id %}selected{% endif %}>
+                                {{ c.name }} (Balance: ₹{{ "%.2f"|format(c.balance) }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-lg w-100" 
+                            {% if not cart %}disabled{% endif %}>
+                        <i class="bi bi-check-circle"></i> Create Invoice & Generate PDF
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right: Add Product Panel -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm sticky-top" style="top: 80px;">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="bi bi-plus-circle"></i> Add Product</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('main.add_to_cart') }}">
+                    <div class="mb-3">
+                        <label for="product_id" class="form-label fw-bold">Product *</label>
+                        <select name="product_id" id="product_id" class="form-select" required onchange="updateProductInfo()">
+                            <option value="">-- Select Product --</option>
+                            {% for p in products %}
+                            <option value="{{ p.id }}" 
+                                    data-stock="{{ p.stock }}"
+                                    data-price="{{ p.sale_price }}"
+                                    data-sku="{{ p.sku }}">
+                                {{ p.name }} (Stock: {{ p.stock }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label fw-bold">Quantity *</label>
+                        <input type="number" name="quantity" id="quantity" 
+                               class="form-control form-control-lg" 
+                               value="1" min="1" required>
+                        <small id="stockInfo" class="form-text text-muted"></small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Price per Unit</label>
+                        <input type="text" id="priceDisplay" class="form-control" readonly>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-cart-plus"></i> Add to Cart
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateProductInfo() {
+    const select = document.getElementById('product_id');
+    const option = select.options[select.selectedIndex];
+    
+    if (option.value) {
+        const stock = option.dataset.stock;
+        const price = option.dataset.price;
+        
+        document.getElementById('stockInfo').textContent = `Available stock: ${stock} units`;
+        document.getElementById('priceDisplay').value = `₹${parseFloat(price).toFixed(2)}`;
+        document.getElementById('quantity').max = stock;
+    } else {
+        document.getElementById('stockInfo').textContent = '';
+        document.getElementById('priceDisplay').value = '';
+    }
+}
+</script>
+{% endblock %}

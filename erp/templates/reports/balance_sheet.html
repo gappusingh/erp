@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-primary text-white">
+        <h2 class="mb-0"><i class="bi bi-file-earmark-spreadsheet"></i> Balance Sheet</h2>
+        <p class="mb-0 small">As of {{ now().strftime('%d %B %Y') }}</p>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <!-- Assets Section -->
+            <div class="col-md-6">
+                <div class="card border-success mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h4 class="mb-0"><i class="bi bi-plus-circle"></i> ASSETS</h4>
+                    </div>
+                    <div class="card-body">
+                        <table class="table">
+                            <tbody>
+                                <tr class="table-light">
+                                    <td colspan="2"><strong>Current Assets</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Cash & Bank</td>
+                                    <td class="text-end fw-bold">₹{{ "%.2f"|format(total_cash) }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Accounts Receivable</td>
+                                    <td class="text-end fw-bold">₹{{ "%.2f"|format(accounts_receivable) }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Inventory</td>
+                                    <td class="text-end fw-bold">₹{{ "%.2f"|format(inventory_value) }}</td>
+                                </tr>
+                                <tr class="table-success">
+                                    <td><strong>Total Assets</strong></td>
+                                    <td class="text-end fw-bold fs-5">₹{{ "%.2f"|format(total_assets) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Liabilities & Equity Section -->
+            <div class="col-md-6">
+                <div class="card border-danger mb-3">
+                    <div class="card-header bg-danger text-white">
+                        <h4 class="mb-0"><i class="bi bi-dash-circle"></i> LIABILITIES & EQUITY</h4>
+                    </div>
+                    <div class="card-body">
+                        <table class="table">
+                            <tbody>
+                                <tr class="table-light">
+                                    <td colspan="2"><strong>Current Liabilities</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Accounts Payable</td>
+                                    <td class="text-end fw-bold">₹{{ "%.2f"|format(accounts_payable) }}</td>
+                                </tr>
+                                <tr class="table-warning">
+                                    <td><strong>Total Liabilities</strong></td>
+                                    <td class="text-end fw-bold">₹{{ "%.2f"|format(total_liabilities) }}</td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td colspan="2"><strong>Owner's Equity</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Capital</td>
+                                    <td class="text-end fw-bold">₹{{ "%.2f"|format(total_equity) }}</td>
+                                </tr>
+                                <tr class="table-info">
+                                    <td><strong>Total Liabilities & Equity</strong></td>
+                                    <td class="text-end fw-bold fs-5">₹{{ "%.2f"|format(total_liabilities + total_equity) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Balance Check -->
+        <div class="alert {% if total_assets == (total_liabilities + total_equity) %}alert-success{% else %}alert-warning{% endif %} text-center">
+            <h5 class="mb-0">
+                {% if total_assets == (total_liabilities + total_equity) %}
+                    <i class="bi bi-check-circle"></i> Balance Sheet is Balanced
+                {% else %}
+                    <i class="bi bi-exclamation-triangle"></i> Warning: Balance Sheet may need adjustment
+                {% endif %}
+            </h5>
+        </div>
+    </div>
+</div>
+{% endblock %}

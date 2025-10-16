@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Purchase History{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">Purchase Order History</h1>
+        <a href="{{ url_for('main.create_purchase_order') }}" class="btn btn-success">
+            <i class="fas fa-plus-circle me-2"></i>Create New PO
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th scope="col">PO Number</th>
+                            <th scope="col">Date</th>
+                            <th scope="col">Supplier</th>
+                            <th scope="col" class="text-end">Total Value</th>
+                            <th scope="col" style="width: 5%;">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for po in purchase_orders %}
+                            {# This is the main, clickable row. The data-bs-toggle attribute is essential. #}
+                            <tr data-bs-toggle="collapse" href="#details-{{ po.id }}" role="button" aria-expanded="false" aria-controls="details-{{ po.id }}">
+                                <td>{{ po.po_number }}</td>
+                                <td>{{ po.created_at.strftime('%d-%b-%Y') }}</td>
+                                <td>{{ po.supplier.name }}</td>
+                                <td class="text-end fw-bold">₹{{ "%.2f"|format(po.total_amount) }}</td>
+                                <td class="text-center"><i class="fas fa-chevron-down"></i></td> {# This adds the arrow icon #}
+                            </tr>
+                            {# This is the hidden row with the item details that will expand #}
+                            <tr>
+                                <td colspan="5" class="p-0">
+                                    <div class="collapse" id="details-{{ po.id }}">
+                                        <div class="p-3 bg-light">
+                                            <h6 class="mb-2">Order Items:</h6>
+                                            <table class="table table-sm table-bordered mb-0">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Product Name</th>
+                                                        <th class="text-center">Quantity</th>
+                                                        <th class="text-end">Unit Price</th>
+                                                        <th class="text-end">Total</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {# This inner loop displays the product details #}
+                                                    {% for item in po.items %}
+                                                    <tr>
+                                                        <td>{{ item.product.name }}</td>
+                                                        <td class="text-center">{{ item.quantity }}</td>
+                                                        <td class="text-end">₹{{ "%.2f"|format(item.unit_cost) }}</td>
+                                                        <td class="text-end">₹{{ "%.2f"|format(item.total) }}</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center">No purchase orders found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

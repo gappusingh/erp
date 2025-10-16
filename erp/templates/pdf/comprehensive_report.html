@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Business Summary Report</title>
+    <style>
+        @page { size: A4; margin: 1.5cm; }
+        body { font-family: sans-serif; color: #333; font-size: 10pt; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { color: #0d6efd; margin: 0; }
+        .header p { color: #6c757d; margin: 5px 0; }
+        
+        .section-title {
+            background-color: #0d6efd;
+            color: white;
+            padding: 10px;
+            font-size: 1.2em;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            page-break-before: auto;
+            page-break-inside: avoid;
+        }
+        
+        .charts {
+            text-align: center;
+            margin: 20px 0;
+            page-break-inside: avoid;
+        }
+        .charts img { width: 48%; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #dee2e6;
+            padding: 6px;
+            text-align: left;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .summary-table td:first-child { width: 70%; }
+        .summary-table td:last-child { text-align: right; }
+        .text-right { text-align: right; }
+        .text-danger { color: #dc3545; }
+        .text-success { color: #198754; }
+        .total-row { background-color: #e9ecef; font-weight: bold; }
+
+        /* Styles for the detailed invoice table */
+        .invoice-header-row { background-color: #f8f9fa; }
+        .invoice-item-row td { padding-left: 20px; border-top: none; border-bottom: none; }
+        .invoice-footer-row { font-weight: bold; border-top: 2px solid #ccc; }
+
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Business Summary Report</h1>
+        <p>DistroERP</p>
+        <p>Period: <strong>{{ start_date.strftime('%d %B %Y') }}</strong> to <strong>{{ end_date.strftime('%d %B %Y') }}</strong></p>
+    </div>
+
+    <div class="section-title">Visual Summary</div>
+    <div class="charts">
+        <img src="data:image/png;base64,{{ profit_chart_image }}">
+        <img src="data:image/png;base64,{{ expense_chart_image }}">
+    </div>
+
+    <div class="section-title">Profit & Loss Summary</div>
+    <table class="summary-table">
+        <tr><td>Sales Revenue</td> <td class="text-success">₹{{ "%.2f"|format(total_revenue) }}</td></tr>
+        <tr><td>Cost of Goods Sold (COGS)</td> <td class="text-danger">(₹{{ "%.2f"|format(total_cogs) }})</td></tr>
+        <tr class="total-row"><td>Gross Profit</td> <td>₹{{ "%.2f"|format(gross_profit) }}</td></tr>
+        <tr><td>Operating Expenses</td> <td class="text-danger">(₹{{ "%.2f"|format(total_expenses) }})</td></tr>
+        <tr class="total-row" style="background-color: #cfe2ff;"><td>Net Profit</td> <td>₹{{ "%.2f"|format(net_profit) }}</td></tr>
+    </table>
+
+    <div class="section-title">Sales (Invoices)</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Invoice #</th>
+                <th>Customer</th>
+                <th>Product Details</th>
+                <th class="text-right">Qty</th>
+                <th class="text-right">Price</th>
+                <th class="text-right">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sale in all_sales %}
+                {% for item in sale.items %}
+                    {% if loop.first %}
+                    <tr class="invoice-header-row">
+                        <td rowspan="{{ sale.items|length }}">{{ sale.created_at.strftime('%d-%m-%Y') }}</td>
+                        <td rowspan="{{ sale.items|length }}">{{ sale.invoice_number }}</td>
+                        <td rowspan="{{ sale.items|length }}">{{ sale.customer.name }}</td>
+                        <td>{{ item.product.name }}</td>
+                        <td class="text-right">{{ item.quantity }}</td>
+                        <td class="text-right">₹{{ "%.2f"|format(item.unit_price) }}</td>
+                        <td class="text-right">₹{{ "%.2f"|format(item.total) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr class="invoice-item-row">
+                        <td>{{ item.product.name }}</td>
+                        <td class="text-right">{{ item.quantity }}</td>
+                        <td class="text-right">₹{{ "%.2f"|format(item.unit_price) }}</td>
+                        <td class="text-right">₹{{ "%.2f"|format(item.total) }}</td>
+                    </tr>
+                    {% endif %}
+                {% endfor %}
+                 <tr class="invoice-footer-row">
+                    <td colspan="6" class="text-right">Invoice Total (inc. GST)</td>
+                    <td class="text-right">₹{{ "%.2f"|format(sale.total_amount) }}</td>
+                </tr>
+            {% else %}
+                <tr><td colspan="7">No sales recorded in this period.</td></tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="total-row"><td colspan="6">Grand Total Sales (Subtotal)</td><td class="text-right">₹{{ "%.2f"|format(total_revenue) }}</td></tr>
+        </tfoot>
+    </table>
+
+    <div class="section-title">Purchases (Purchase Orders)</div>
+    <table>
+        <thead><tr><th>Date</th><th>PO #</th><th>Supplier</th><th class="text-right">Amount</th></tr></thead>
+        <tbody>
+            {% for purchase in all_purchases %}
+            <tr>
+                <td>{{ purchase.created_at.strftime('%d-%m-%Y') }}</td>
+                <td>{{ purchase.po_number }}</td>
+                <td>{{ purchase.supplier.name }}</td>
+                <td class="text-right">₹{{ "%.2f"|format(purchase.total_amount) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4">No purchases recorded in this period.</td></tr>
+            {% endfor %}
+        </tbody>
+        <tfoot><tr class="total-row"><td colspan="3">Total Purchases</td><td class="text-right">₹{{ "%.2f"|format(total_purchases_amount) }}</td></tr></tfoot>
+    </table>
+
+    <div class="section-title">Operating Expenses</div>
+    <table>
+        <thead><tr><th>Date</th><th>Category</th><th>Description</th><th class="text-right">Amount</th></tr></thead>
+        <tbody>
+            {% for expense in all_expenses_list %}
+            <tr>
+                <td>{{ expense.expense_date.strftime('%d-%m-%Y') }}</td>
+                <td>{{ expense.category }}</td>
+                <td>{{ expense.description }}</td>
+                <td class="text-right">₹{{ "%.2f"|format(expense.amount) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4">No expenses recorded in this period.</td></tr>
+            {% endfor %}
+        </tbody>
+        <tfoot><tr class="total-row"><td colspan="3">Total Expenses</td><td class="text-right">₹{{ "%.2f"|format(total_expenses) }}</td></tr></tfoot>
+    </table>
+
+    <div class="section-title">Customer Payments Received</div>
+    <table>
+        <thead><tr><th>Date</th><th>Payment #</th><th>Customer</th><th>Mode</th><th class="text-right">Amount</th></tr></thead>
+        <tbody>
+            {% for payment in all_customer_payments %}
+            <tr>
+                <td>{{ payment.payment_date.strftime('%d-%m-%Y') }}</td>
+                <td>{{ payment.payment_number }}</td>
+                <td>{{ payment.customer.name }}</td>
+                <td>{{ payment.payment_mode }}</td>
+                <td class="text-right">₹{{ "%.2f"|format(payment.amount) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">No payments received in this period.</td></tr>
+            {% endfor %}
+        </tbody>
+        <tfoot><tr class="total-row"><td colspan="4">Total Payments Received</td><td class="text-right">₹{{ "%.2f"|format(total_payments_received) }}</td></tr></tfoot>
+    </table>
+
+</body>
+</html>

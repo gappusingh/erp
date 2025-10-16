@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice #{{ invoice.invoice_number }}</title>
+    <style>
+        body { 
+            font-family: 'Arial', sans-serif; 
+            font-size: 11px; 
+            color: #333;
+            margin: 20px;
+        }
+        .header { 
+            text-align: center; 
+            border-bottom: 3px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .header h1 { 
+            margin: 0; 
+            color: #000;
+            font-size: 28px;
+        }
+        .company-info { 
+            font-size: 10px; 
+            color: #666;
+        }
+        .invoice-details { 
+            margin: 20px 0;
+        }
+        .invoice-details table { 
+            width: 100%; 
+            border-collapse: collapse;
+        }
+        .invoice-details td { 
+            padding: 5px;
+            vertical-align: top;
+        }
+        .label { 
+            font-weight: bold;
+            color: #000;
+        }
+        .items-table { 
+            width: 100%; 
+            margin-top: 20px; 
+            border-collapse: collapse;
+        }
+        .items-table th, .items-table td { 
+            border: 1px solid #ddd; 
+            padding: 8px; 
+            text-align: left;
+        }
+        .items-table th { 
+            background-color: #333; 
+            color: white;
+            font-weight: bold;
+        }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .summary-table { 
+            width: 45%; 
+            float: right; 
+            margin-top: 20px;
+        }
+        .summary-table td { 
+            padding: 6px;
+            border-bottom: 1px solid #eee;
+        }
+        .summary-table .label { 
+            font-weight: bold;
+            width: 60%;
+        }
+        .total-row { 
+            font-weight: bold; 
+            font-size: 13px; 
+            background-color: #f8f9fa;
+            border-top: 2px solid #333 !important;
+        }
+        .payment-summary {
+            background-color: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .footer { 
+            position: fixed; 
+            bottom: 20px; 
+            width: 95%;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+        }
+        .signature-section {
+            margin-top: 50px;
+            page-break-inside: avoid;
+        }
+        .signature-box {
+            width: 200px;
+            border-top: 1px solid #000;
+            text-align: center;
+            padding-top: 5px;
+            float: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>TAX INVOICE</h1>
+        <div class="company-info">
+            <strong>{{ company_info.name }}</strong><br>
+            {{ company_info.address }}<br>
+            GSTIN: {{ company_info.gstin }} | Phone: {{ company_info.phone }}<br>
+            Email: {{ company_info.email }}
+        </div>
+    </div>
+    
+    <div class="invoice-details">
+        <table>
+            <tr>
+                <td style="width: 60%;">
+                    <span class="label">BILLED TO:</span><br>
+                    <strong>{{ customer.name }}</strong><br>
+                    {% if customer.address %}{{ customer.address }}<br>{% endif %}
+                    {% if customer.phone %}Phone: {{ customer.phone }}<br>{% endif %}
+                    {% if customer.gstin %}GSTIN: {{ customer.gstin }}<br>{% endif %}
+                    {% if customer.state_code %}State Code: {{ customer.state_code }}{% endif %}
+                </td>
+                <td style="width: 40%;" class="text-right">
+                    <span class="label">Invoice Number:</span> {{ invoice.invoice_number }}<br>
+                    <span class="label">Invoice Date:</span> {{ invoice.created_at.strftime('%d-%b-%Y') }}<br>
+                    <span class="label">Time:</span> {{ invoice.created_at.strftime('%I:%M %p') }}<br>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 40%;">Item Description</th>
+                <th style="width: 12%;">HSN Code</th>
+                <th style="width: 10%;" class="text-center">Qty</th>
+                <th style="width: 13%;" class="text-right">Rate (₹)</th>
+                <th style="width: 10%;" class="text-right">GST %</th>
+                <th style="width: 13%;" class="text-right">Amount (₹)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in invoice.items %}
+            <tr>
+                <td class="text-center">{{ loop.index }}</td>
+                <td>{{ item.product.name }}<br><small>SKU: {{ item.product.sku }}</small></td>
+                <td>{{ item.product.hsn_code or 'N/A' }}</td>
+                <td class="text-center">{{ item.quantity }}</td>
+                <td class="text-right">{{ "%.2f"|format(item.unit_price) }}</td>
+                <td class="text-right">{{ "%.0f"|format((item.cgst_rate + item.sgst_rate)) }}%</td>
+                <td class="text-right">{{ "%.2f"|format(item.total) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div style="clear: both;">
+        <table class="summary-table">
+            <tr>
+                <td class="label">Subtotal:</td>
+                <td class="text-right">₹{{ "%.2f"|format(invoice.subtotal) }}</td>
+            </tr>
+            {% if invoice.cgst_amount > 0 %}
+            <tr>
+                <td class="label">CGST:</td>
+                <td class="text-right">₹{{ "%.2f"|format(invoice.cgst_amount) }}</td>
+            </tr>
+            <tr>
+                <td class="label">SGST:</td>
+                <td class="text-right">₹{{ "%.2f"|format(invoice.sgst_amount) }}</td>
+            </tr>
+            {% endif %}
+            {% if invoice.igst_amount > 0 %}
+            <tr>
+                <td class="label">IGST:</td>
+                <td class="text-right">₹{{ "%.2f"|format(invoice.igst_amount) }}</td>
+            </tr>
+            {% endif %}
+            <tr class="total-row">
+                <td class="label">Total Invoice Amount:</td>
+                <td class="text-right">₹{{ "%.2f"|format(invoice.total_amount) }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div style="clear: both; margin-top: 20px;">
+        <div class="payment-summary">
+            <table style="width: 50%; float: right;">
+                <tr>
+                    <td class="label">Previous Balance:</td>
+                    <td class="text-right">₹{{ "%.2f"|format(previous_balance) }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Current Invoice:</td>
+                    <td class="text-right">₹{{ "%.2f"|format(invoice.total_amount) }}</td>
+                </tr>
+                <tr style="border-top: 2px solid #000;">
+                    <td class="label" style="font-size: 13px;">Total Amount Due:</td>
+                    <td class="text-right" style="font-size: 14px; font-weight: bold;">
+                        ₹{{ "%.2f"|format(new_balance_due) }}
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <div style="clear: both;" class="signature-section">
+        <div class="signature-box">
+            <strong>Authorized Signatory</strong>
+        </div>
+    </div>
+
+    <div class="footer">
+        <strong>Terms & Conditions:</strong> Payment due within 30 days. Interest @ 18% p.a. will be charged on overdue amounts.<br>
+        This is a computer-generated invoice and does not require a physical signature.<br>
+        <strong>Thank you for your business!</strong>
+    </div>
+</body>
+</html>

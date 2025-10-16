@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-primary text-white">
+        <h2 class="mb-0"><i class="bi bi-bar-chart-line-fill"></i> Profit & Loss Statement</h2>
+    </div>
+    <div class="card-body">
+        <form method="POST" class="row g-3 align-items-end mb-4 border-bottom pb-4">
+            {{ form.hidden_tag() }}
+            <div class="col-md-4">
+                {{ form.start_date.label(class="form-label fw-bold") }}
+                {{ form.start_date(class="form-control") }}
+            </div>
+            <div class="col-md-4">
+                {{ form.end_date.label(class="form-label fw-bold") }}
+                {{ form.end_date(class="form-control") }}
+            </div>
+            <div class="col-md-4">
+                {{ form.submit(class="btn btn-primary w-100") }}
+            </div>
+        </form>
+        <form method="POST" class="row g-3 align-items-end mb-4 border-bottom pb-4">
+    {{ form.hidden_tag() }}
+    <div class="col-md-4">
+        {{ form.start_date.label(class="form-label fw-bold") }}
+        {{ form.start_date(class="form-control", id="start_date_field") }}
+    </div>
+    <div class="col-md-4">
+        {{ form.end_date.label(class="form-label fw-bold") }}
+        {{ form.end_date(class="form-control", id="end_date_field") }}
+    </div>
+    <div class="col-md-2">
+        {{ form.submit(class="btn btn-primary w-100") }}
+    </div>
+    <div class="col-md-2">
+        <a id="downloadPdfBtn" href="#" class="btn btn-success w-100" target="_blank" rel="noopener noreferrer">
+            <i class="bi bi-file-earmark-pdf"></i> Download
+        </a>
+    </div>
+</form>
+
+        <h4 class="text-center mb-4">
+            Report for: <strong>{{ start_date.strftime('%d %B %Y') }}</strong> to 
+            <strong>{{ end_date.strftime('%d %B %Y') }}</strong>
+        </h4>
+
+        <div class="row mb-5 text-center">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Revenue & Profit Breakdown</h5>
+                        <canvas id="profitBreakdownChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Expense Categories</h5>
+                        <canvas id="expenseBreakdownChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <tbody>
+                    <tr class="table-light">
+                        <td colspan="2"><strong><i class="bi bi-graph-up"></i> REVENUE</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="width: 70%;">Sales Revenue</td>
+                        <td class="text-end fw-bold">₹{{ "%.2f"|format(total_revenue) }}</td>
+                    </tr>
+                    
+                    <tr class="table-light">
+                        <td colspan="2"><strong><i class="bi bi-box"></i> COST OF GOODS SOLD</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Cost of Products Sold</td>
+                        <td class="text-end text-danger">(₹{{ "%.2f"|format(total_cogs) }})</td>
+                    </tr>
+                    
+                    <tr class="table-success">
+                        <td><strong>GROSS PROFIT</strong></td>
+                        <td class="text-end fw-bold">₹{{ "%.2f"|format(gross_profit) }}</td>
+                    </tr>
+                    
+                    <tr class="table-light">
+                        <td colspan="2"><strong><i class="bi bi-cash-stack"></i> OPERATING EXPENSES</strong></td>
+                    </tr>
+                    {% for expense in expenses_by_category %}
+                    <tr>
+                        <td>{{ expense.category }}</td>
+                        <td class="text-end text-danger">(₹{{ "%.2f"|format(expense.amount) }})</td>
+                    </tr>
+                    {% else %} {# This block executes if expenses_by_category is empty #}
+                    <tr>
+                        <td>No categorized expenses for this period.</td>
+                        <td class="text-end text-danger">(₹0.00)</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="table-secondary">
+                        <td class="fw-bold">Total Operating Expenses</td>
+                        <td class="text-end fw-bold text-danger">(₹{{ "%.2f"|format(total_expenses) }})</td>
+                    </tr>
+                    
+                    <tr class="table-primary fs-5">
+                        <td><strong><i class="bi bi-currency-rupee"></i> NET PROFIT</strong></td>
+                        <td class="text-end fw-bold">
+                            <span class="{% if net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                ₹{{ "%.2f"|format(net_profit) }}
+                            </span>
+                        </td>
+                    </tr>
+                    
+                    <tr class="table-info">
+                        <td><strong>Net Profit Margin</strong></td>
+                        <td class="text-end fw-bold">
+                            {% if total_revenue > 0 %}
+                                {{ "%.2f"|format((net_profit / total_revenue) * 100) }}%
+                            {% else %}
+                                0.00%
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Register the datalabels plugin globally
+    Chart.register(ChartDataLabels);
+
+    // 1. Revenue & Profit Breakdown Doughnut Chart
+    const profitCtx = document.getElementById('profitBreakdownChart').getContext('2d');
+    new Chart(profitCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Cost of Goods Sold', 'Operating Expenses', 'Net Profit'],
+            datasets: [{
+                label: 'Amount',
+                data: [
+                    {{ total_cogs|abs | default(0) }}, 
+                    {{ total_expenses|abs | default(0) }}, 
+                    {{ net_profit if net_profit > 0 else 0 | default(0) }}
+                ],
+                backgroundColor: [
+                    'rgba(255, 159, 64, 0.7)', // Orange for COGS
+                    'rgba(255, 99, 132, 0.7)',  // Red for Expenses
+                    'rgba(75, 192, 192, 0.7)'   // Green for Net Profit
+                ],
+                borderColor: [
+                    'rgba(255, 159, 64, 1)',
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(75, 192, 192, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                datalabels: { // Data labels for values
+                    formatter: (value, ctx) => {
+                        let sum = 0;
+                        let dataArr = ctx.chart.data.datasets[0].data;
+                        dataArr.map(data => {
+                            sum += data;
+                        });
+                        let percentage = (value * 100 / sum).toFixed(2) + "%";
+                        return "₹" + value.toLocaleString() + " (" + percentage + ")";
+                    },
+                    color: '#fff',
+                    font: {
+                        weight: 'bold'
+                    }
+                }
+            }
+        }
+    });
+
+    // 2. Expense Breakdown Pie Chart
+    const expenseCtx = document.getElementById('expenseBreakdownChart').getContext('2d');
+    // Use the 'tojson' filter to safely pass data from Flask to JavaScript
+    const expenseData = {{ expenses_by_category | default([]) | tojson }};
+    
+    new Chart(expenseCtx, {
+        type: 'pie',
+        data: {
+            labels: expenseData.map(item => item.category),
+            datasets: [{
+                label: 'Expenses',
+                data: expenseData.map(item => item.amount),
+                backgroundColor: [ // Add more colors if you have many categories
+                    'rgba(255, 99, 132, 0.7)',  // Red
+                    'rgba(54, 162, 235, 0.7)',  // Blue
+                    'rgba(255, 206, 86, 0.7)',  // Yellow
+                    'rgba(75, 192, 192, 0.7)',  // Teal
+                    'rgba(153, 102, 255, 0.7)', // Purple
+                    'rgba(255, 159, 64, 0.7)',  // Orange
+                    'rgba(199, 199, 199, 0.7)', // Grey
+                    'rgba(83, 102, 255, 0.7)'   // Indigo
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                datalabels: { // Data labels for values
+                    formatter: (value, ctx) => {
+                        let sum = 0;
+                        let dataArr = ctx.chart.data.datasets[0].data;
+                        dataArr.map(data => {
+                            sum += data;
+                        });
+                        let percentage = (value * 100 / sum).toFixed(2) + "%";
+                        return "₹" + value.toLocaleString() + " (" + percentage + ")";
+                    },
+                    color: '#fff',
+                    font: {
+                        weight: 'bold'
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // ... your existing chart code ...
+
+    // NEW SCRIPT FOR PDF BUTTON
+    const downloadBtn = document.getElementById('downloadPdfBtn');
+    const startDateField = document.getElementById('start_date_field');
+    const endDateField = document.getElementById('end_date_field');
+
+    function updatePdfLink() {
+        const startDate = startDateField.value;
+        const endDate = endDateField.value;
+        if (startDate && endDate) {
+            downloadBtn.href = `{{ url_for('main.download_summary_report') }}?start_date=${startDate}&end_date=${endDate}`;
+        }
+    }
+
+    startDateField.addEventListener('change', updatePdfLink);
+    endDateField.addEventListener('change', updatePdfLink);
+    
+    // Set initial link on page load
+    updatePdfLink();
+});
+</script>
+{% endblock %}

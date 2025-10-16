@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Challans for {{ customer.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="h2 mb-4">Delivery Challans for: <strong>{{ customer.name }}</strong></h1>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Challan Number</th>
+                            <th>Date</th>
+                            <th>Related Invoice</th>
+                            <th>Vehicle Number</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for challan in challans %}
+                        <tr>
+                            <td>{{ challan.challan_number }}</td>
+                            <td>{{ challan.created_at.strftime('%d-%b-%Y') }}</td>
+                            <td>{{ challan.invoice.invoice_number if challan.invoice else 'N/A' }}</td>
+                            <td>{{ challan.vehicle_number or 'N/A' }}</td>
+                            <td class="text-end">
+                                <a href="{{ url_for('main.generate_challan_pdf', challan_id=challan.id) }}" 
+                                   target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-file-pdf"></i> View PDF
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center">No delivery challans found for this customer.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

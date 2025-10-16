@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Delivery Challan #{{ challan.challan_number }}</title>
+    <style>
+        body { 
+            font-family: 'Arial', sans-serif; 
+            font-size: 12px; 
+            color: #333;
+            margin: 20px;
+        }
+        .header { 
+            text-align: center; 
+            border-bottom: 3px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .header h1 { 
+            margin: 0; 
+            color: #000;
+            font-size: 26px;
+        }
+        .company-info { 
+            font-size: 10px; 
+            color: #666;
+        }
+        .details-section {
+            margin: 20px 0;
+        }
+        .details-table { 
+            width: 100%; 
+            border-collapse: collapse;
+        }
+        .details-table td { 
+            padding: 8px;
+            vertical-align: top;
+        }
+        .label { 
+            font-weight: bold;
+            color: #000;
+        }
+        .items-table { 
+            width: 100%; 
+            margin-top: 20px; 
+            border-collapse: collapse;
+        }
+        .items-table th, .items-table td { 
+            border: 1px solid #333; 
+            padding: 10px; 
+            text-align: left;
+        }
+        .items-table th { 
+            background-color: #333; 
+            color: white;
+            font-weight: bold;
+        }
+        .text-center { text-align: center; }
+        .signature-section {
+            margin-top: 80px;
+            page-break-inside: avoid;
+        }
+        .signature-box {
+            width: 200px;
+            border-top: 2px solid #000;
+            text-align: center;
+            padding-top: 5px;
+        }
+        .float-left { float: left; }
+        .float-right { float: right; }
+        .note-box {
+            background-color: #f8f9fa;
+            border: 1px dashed #666;
+            padding: 10px;
+            margin-top: 20px;
+        }
+        .footer {
+            position: fixed;
+            bottom: 20px;
+            width: 95%;
+            text-align: center;
+            font-size: 9px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>DELIVERY CHALLAN</h1>
+        <div class="company-info">
+            <strong>{{ company_info.name }}</strong><br>
+            {{ company_info.address }}<br>
+            Phone: {{ company_info.phone }}
+        </div>
+    </div>
+    
+    <div class="details-section">
+        <table class="details-table">
+            <tr>
+                <td style="width: 50%;">
+                    <span class="label">CONSIGNEE (SHIP TO):</span><br>
+                    <strong>{{ challan.customer.name }}</strong><br>
+                    {% if challan.customer.address %}{{ challan.customer.address }}<br>{% endif %}
+                    {% if challan.customer.phone %}Phone: {{ challan.customer.phone }}<br>{% endif %}
+                    {% if challan.customer.gstin %}GSTIN: {{ challan.customer.gstin }}{% endif %}
+                </td>
+                <td style="width: 50%;">
+                    <span class="label">Challan Number:</span> {{ challan.challan_number }}<br>
+                    <span class="label">Challan Date:</span> {{ challan.created_at.strftime('%d-%b-%Y') }}<br>
+                    <span class="label">Time:</span> {{ challan.created_at.strftime('%I:%M %p') }}<br>
+                    {% if challan.invoice %}
+                    <span class="label">Invoice Reference:</span> {{ challan.invoice.invoice_number }}<br>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="details-section">
+        <table class="details-table">
+            <tr>
+                <td style="width: 50%;">
+                    <span class="label">Vehicle Number:</span> {{ challan.vehicle_number }}<br>
+                    <span class="label">Driver Name:</span> {{ challan.driver_name }}
+                </td>
+                <td style="width: 50%;">
+                    <span class="label">Transport Mode:</span> Road<br>
+                    <span class="label">Date of Dispatch:</span> {{ challan.created_at.strftime('%d-%b-%Y') }}
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th style="width: 8%;" class="text-center">S.No</th>
+                <th style="width: 50%;">Description of Goods</th>
+                <th style="width: 15%;">HSN Code</th>
+                <th style="width: 15%;" class="text-center">Quantity</th>
+                <th style="width: 12%;">Unit</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in challan.items %}
+            <tr>
+                <td class="text-center">{{ loop.index }}</td>
+                <td>
+                    <strong>{{ item.product.name }}</strong><br>
+                    <small>SKU: {{ item.product.sku }}</small>
+                </td>
+                <td>{{ item.product.hsn_code or 'N/A' }}</td>
+                <td class="text-center"><strong>{{ item.quantity }}</strong></td>
+                <td>Nos</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3" class="text-center"><strong>Total Items</strong></td>
+                <td class="text-center"><strong>{{ challan.items|sum(attribute='quantity') }}</strong></td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="note-box">
+        <strong>Note:</strong> This is a delivery challan only. Tax invoice to follow separately.
+        Please check the goods at the time of delivery and report any discrepancy immediately.
+    </div>
+
+    <div class="signature-section">
+        <div class="float-left signature-box">
+            <strong>Received By</strong><br>
+            (Customer's Signature & Stamp)
+        </div>
+        <div class="float-right signature-box">
+            <strong>For {{ company_info.name }}</strong><br>
+            (Authorized Signatory)
+        </div>
+    </div>
+
+    <div class="footer">
+        This is a computer-generated delivery challan.<br>
+        For any queries, please contact: {{ company_info.phone }}
+    </div>
+</body>
+</html>

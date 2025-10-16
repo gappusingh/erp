@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="px-4 py-3 mb-4 text-center bg-white rounded shadow-sm">
+    <h1 class="display-5 fw-bold"><i class="bi bi-speedometer2"></i> Business Dashboard</h1>
+    <p class="text-muted">Live summary as of {{ now().strftime('%A, %d %B %Y, %I:%M %p') }}</p>
+</div>
+
+<!-- Financial Metrics -->
+<div class="row text-center mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card text-white bg-success h-100 metric-card">
+            <div class="card-header fs-6"><i class="bi bi-cash-coin"></i> Collection Today</div>
+            <div class="card-body">
+                <h2 class="display-4">₹{{ "%.2f"|format(collections_today) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-dark bg-warning h-100 metric-card">
+            <div class="card-header fs-6"><i class="bi bi-graph-up-arrow"></i> Credit Given Today</div>
+            <div class="card-body">
+                <h2 class="display-4">₹{{ "%.2f"|format(credit_today) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-white bg-danger h-100 metric-card">
+            <div class="card-header fs-6"><i class="bi bi-exclamation-triangle-fill"></i> Total Market Due</div>
+            <div class="card-body">
+                <h2 class="display-4">₹{{ "%.2f"|format(market_due) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-white bg-info h-100 metric-card">
+            <div class="card-header fs-6"><i class="bi bi-building"></i> Supplier Payable</div>
+            <div class="card-body">
+                <h2 class="display-4">₹{{ "%.2f"|format(supplier_due) }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<hr class="my-4">
+
+<!-- Customer/Shop Cards -->
+<h3 class="mb-4"><i class="bi bi-shop"></i> Shop-wise Summary</h3>
+
+{% if customers %}
+<div class="row">
+    {% for customer in customers %}
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-shop"></i> {{ customer.name }}</h5>
+                <span class="badge bg-light text-dark fs-6">₹{{ "%.2f"|format(customer.balance) }}</span>
+            </div>
+            <div class="card-body">
+                <ul class="nav nav-tabs" id="customerTab{{ customer.id }}" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="billing-tab-{{ customer.id }}" 
+                                data-bs-toggle="tab" data-bs-target="#billing-{{ customer.id }}" 
+                                type="button" role="tab">
+                            <i class="bi bi-receipt"></i> Billings
+                        </button>
+                    </li>
+                    
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="payments-tab-{{ customer.id }}" 
+                                data-bs-toggle="tab" data-bs-target="#payments-{{ customer.id }}" 
+                                type="button" role="tab">
+                            <i class="bi bi-cash"></i> Payments
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="summary-tab-{{ customer.id }}" 
+                                data-bs-toggle="tab" data-bs-target="#summary-{{ customer.id }}" 
+                                type="button" role="tab">
+                            <i class="bi bi-bar-chart"></i> Stats
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content pt-3" id="customerTabContent{{ customer.id }}">
+                    <!-- Billings Tab -->
+                    <div class="tab-pane fade show active" id="billing-{{ customer.id }}" role="tabpanel">
+                        <div class="table-responsive" style="max-height: 200px;">
+                            <table class="table table-sm">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>Invoice</th>
+                                        <th>Date</th>
+                                        <th class="text-end">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                   {% for invoice in (customer.invoices|sort(attribute='created_at', reverse=True))[:10] %}
+                                    <tr>
+                                        <td>
+                                            <a href="{{ url_for('main.generate_invoice_pdf', invoice_id=invoice.id) }}" 
+                                               target="_blank" class="text-decoration-none">
+                                                #{{ invoice.invoice_number or invoice.id }}
+                                            </a>
+                                        </td>
+                                        <td><small>{{ invoice.created_at.strftime('%d-%b') }}</small></td>
+                                        <td class="text-end fw-bold">₹{{ "%.2f"|format(invoice.total_amount) }}</td>
+                                    </tr>
+                                    {% else %}
+                                    <tr><td colspan="3" class="text-center text-muted">No billings yet</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Payments Tab -->
+                    <div class="tab-pane fade" id="payments-{{ customer.id }}" role="tabpanel">
+                        <div class="table-responsive" style="max-height: 200px;">
+                            <table class="table table-sm">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Mode</th>
+                                        <th class="text-end">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for payment in (customer.payments|sort(attribute='payment_date', reverse=True))[:10] %}
+                                    <tr>
+                                        <td><small>{{ payment.payment_date.strftime('%d-%b') }}</small></td>
+                                        <td><small>{{ payment.payment_mode }}</small></td>
+                                        <td class="text-end text-success fw-bold">₹{{ "%.2f"|format(payment.amount) }}</td>
+                                    </tr>
+                                    {% else %}
+                                    <tr><td colspan="3" class="text-center text-muted">No payments yet</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Summary Tab -->
+                    <div class="tab-pane fade" id="summary-{{ customer.id }}" role="tabpanel">
+                        <h6 class="text-muted">Orders Per Month</h6>
+                        <ul class="list-group list-group-flush">
+                            {% for month, count in customer.orders_summary %}
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>{{ month }}</span>
+                                <span class="badge bg-primary rounded-pill">{{ count }}</span>
+                            </li>
+                            {% else %}
+                            <li class="list-group-item text-center text-muted">No order history</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card-footer text-center bg-light">
+                <a href="{{ url_for('main.create_invoice', customer_id=customer.id) }}" 
+                   class="btn btn-primary btn-sm">
+                    <i class="bi bi-receipt"></i> New Order
+                </a>
+                <a href="{{ url_for('main.add_payment', customer_id=customer.id) }}" 
+                   class="btn btn-success btn-sm">
+                    <i class="bi bi-cash-coin"></i> Payment
+                </a>
+                <a href="{{ url_for('main.view_statement', customer_id=customer.id) }}" 
+                   class="btn btn-secondary btn-sm">
+                    <i class="bi bi-journal-text"></i> Statement
+                </a>
+                <a href="{{ url_for('main.customer_challans_list', customer_id=customer.id) }}" 
+       class="btn btn-info btn-sm text-white" title="View Challans">
+        <i class="bi bi-truck"></i> Challans
+    </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info text-center">
+    <i class="bi bi-info-circle"></i> No customers added yet. 
+    <a href="{{ url_for('main.add_customer') }}" class="alert-link">Add your first customer</a>
+</div>
+{% endif %}
+
+{% endblock %}

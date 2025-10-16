@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Create Delivery Challan{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h1 class="h3">Create Delivery Challan for Invoice #{{ invoice.invoice_number }}</h1>
+        </div>
+        <div class="card-body">
+            <div class="mb-4">
+                <p><strong>Customer:</strong> {{ invoice.customer.name }}</p>
+                <p><strong>Invoice Date:</strong> {{ invoice.created_at.strftime('%d-%b-%Y') }}</p>
+            </div>
+
+            <h5 class="mb-3">Items in this Delivery:</h5>
+            <table class="table table-bordered table-sm mb-4">
+                <thead>
+                    <tr>
+                        <th>Product Name</th>
+                        <th class="text-center">Quantity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in invoice.items %}
+                    <tr>
+                        <td>{{ item.product.name }}</td>
+                        <td class="text-center">{{ item.quantity }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <hr>
+
+            <form method="POST" action="" target="_blank">
+                <h5 class="mb-3">Dispatch Details</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="vehicle_number" class="form-label">Vehicle Number</label>
+                        <input type="text" name="vehicle_number" id="vehicle_number" class="form-control" placeholder="e.g., BR01-AA-1234">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="driver_name" class="form-label">Driver Name</label>
+                        <input type="text" name="driver_name" id="driver_name" class="form-control">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-file-earmark-pdf"></i> Generate Challan
+                </button>
+                <a href="{{ url_for('main.view_statement', customer_id=invoice.customer.id) }}" class="btn btn-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

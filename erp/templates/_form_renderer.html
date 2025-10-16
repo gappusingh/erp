@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0">{{ title }}</h2>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="">
+                    {{ form.hidden_tag() }}
+                    
+                    {% for field in form if field.widget.input_type != 'hidden' and field.type != 'SubmitField' %}
+                    <div class="mb-3">
+                        {{ field.label(class="form-label fw-bold") }}
+                        
+                        {% if field.type == 'SelectField' %}
+                            {{ field(class="form-select") }}
+                        {% elif field.type == 'TextAreaField' %}
+                            {{ field(class="form-control", rows="3") }}
+                        {% elif field.type == 'DateField' %}
+                            {{ field(class="form-control", type="date") }}
+                        {% else %}
+                            {{ field(class="form-control") }}
+                        {% endif %}
+                        
+                        {% if field.description %}
+                        <small class="form-text text-muted">{{ field.description }}</small>
+                        {% endif %}
+                        
+                        {% for error in field.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-primary btn-lg") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
