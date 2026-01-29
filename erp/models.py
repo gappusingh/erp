@@ -197,3 +197,59 @@ class LedgerEntry(db.Model):
     credit = db.Column(db.Float, default=0.0, nullable=False)
     
     account = db.relationship('Account')
+
+
+   # --- ADD THIS NEW CLASS ---
+class ServiceCustomer(db.Model):
+    """Separate table strictly for Service/Repair customers"""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    # unique=True makes the Phone Number the Unique ID
+    phone = db.Column(db.String(20), nullable=False, unique=True) 
+    address = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Link to service records
+    services = db.relationship('ServiceRecord', backref='service_customer', lazy=True, cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f'<ServiceCustomer {self.name} - {self.phone}>'
+
+# --- MODIFY THIS EXISTING CLASS ---
+class ServiceRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # CHANGE: Link to ServiceCustomer instead of Customer
+    service_customer_id = db.Column(db.Integer, db.ForeignKey('service_customer.id'), nullable=False)
+    
+    service_date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    serviceman_name = db.Column(db.String(100), nullable=False)
+    issue_reported = db.Column(db.Text, nullable=True)
+    action_taken = db.Column(db.Text, nullable=True)
+    service_charge = db.Column(db.Float, default=0.0)
+    parts_cost = db.Column(db.Float, default=0.0)
+    total_cost = db.Column(db.Float, default=0.0)
+    # next_service_date = db.Column(db.Date, nullable=True)
+    due_date_6mo = db.Column(db.Date, nullable=True)  # For 6-month checkup
+    due_date_1yr = db.Column(db.Date, nullable=True)  # For 1-year renewal
+    # Note: 'service_customer' backref is handled in ServiceCustomer class
+
+
+
+class ServiceBooking(db.Model):
+    """Temporary table for scheduled/pending jobs"""
+    id = db.Column(db.Integer, primary_key=True)
+    customer_name = db.Column(db.String(100), nullable=False)
+    customer_phone = db.Column(db.String(20), nullable=False)
+    address = db.Column(db.Text, nullable=False)
+    
+    # Booking Details
+    scheduled_date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    scheduled_time = db.Column(db.String(20), nullable=True) # e.g., "10:00 AM"
+    issue_reported = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), default='Pending') # Pending, Completed, Cancelled
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Booking {self.id} - {self.customer_name}>'

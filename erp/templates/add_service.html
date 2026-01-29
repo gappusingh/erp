@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header bg-dark text-white">
+            <h3><i class="bi bi-tools"></i> New Repair Job / Service Entry</h3>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                
+                <div class="mb-3">
+                    {{ form.customer.label(class="form-label") }}
+                    {{ form.customer(class="form-select") }}
+                </div>
+                
+                <div class="mb-3">
+                    {{ form.serviceman_name.label(class="form-label") }}
+                    {{ form.serviceman_name(class="form-control", placeholder="Who performed the repair?") }}
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.issue_reported.label(class="form-label") }}
+                        {{ form.issue_reported(class="form-control", rows=3, placeholder="e.g. Low water flow, motor noise...") }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        {{ form.action_taken.label(class="form-label") }}
+                        {{ form.action_taken(class="form-control", rows=3, placeholder="e.g. Changed Membrane, repaired pump...") }}
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        {{ form.parts_cost.label(class="form-label") }}
+                        {{ form.parts_cost(class="form-control") }}
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        {{ form.service_charge.label(class="form-label") }}
+                        {{ form.service_charge(class="form-control") }}
+                    </div>
+                    <!-- <div class="col-md-4 mb-3">
+                        {{ form.next_service_due.label(class="form-label") }}
+                        {{ form.next_service_due(class="form-select") }}
+                        <small class="text-muted">This sets the automatic reminder alert.</small>
+                    </div> -->
+                </div>
+                
+                {{ form.submit(class="btn btn-success btn-lg w-100") }}
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

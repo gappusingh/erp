@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold"><i class="bi bi-alarm"></i> Service Reminders</h2>
+        <a href="{{ url_for('main.service_dashboard') }}" class="btn btn-outline-secondary">Back to Dashboard</a>
+    </div>
+
+    <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active fw-bold px-4 py-2" id="pills-6mo-tab" data-bs-toggle="pill" data-bs-target="#pills-6mo" type="button">
+                <i class="bi bi-calendar-check"></i> 6-Month Due <span class="badge bg-danger ms-2">{{ list_6mo|length }}</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold px-4 py-2" id="pills-1yr-tab" data-bs-toggle="pill" data-bs-target="#pills-1yr" type="button">
+                <i class="bi bi-calendar-event"></i> 1-Year Due <span class="badge bg-warning text-dark ms-2">{{ list_1yr|length }}</span>
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="pills-tabContent">
+        
+        <div class="tab-pane fade show active" id="pills-6mo">
+            <div class="card shadow-sm border-0 border-start border-primary border-4">
+                <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Routine Checkups (6 Months)</h5></div>
+                <div class="card-body p-0">
+                    {% if list_6mo %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light"><tr><th>Date Due</th><th>Customer</th><th>Phone</th><th>Action</th></tr></thead>
+                            <tbody>
+                                {% for item in list_6mo %}
+                                <tr>
+                                    <td class="fw-bold text-danger">{{ item.due_date_6mo.strftime('%d-%b-%Y') }}</td>
+                                    <td>{{ item.service_customer.name }}</td>
+                                    <td>{{ item.service_customer.phone }}</td>
+                                    <td>
+                                        <a href="https://wa.me/91{{ item.service_customer.phone }}?text=Hello {{ item.service_customer.name }}, your 6-month RO service is due on {{ item.due_date_6mo }}. Can we visit?" target="_blank" class="btn btn-sm btn-success"><i class="bi bi-whatsapp"></i></a>
+                                        <a href="{{ url_for('main.book_appointment', customer_id=item.service_customer.id) }}" class="btn btn-sm btn-primary">Book</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-center py-4 text-muted">No 6-month services due.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="pills-1yr">
+            <div class="card shadow-sm border-0 border-start border-warning border-4">
+                <div class="card-header bg-white py-3"><h5 class="mb-0 text-warning text-dark">Annual Maintenance (1 Year)</h5></div>
+                <div class="card-body p-0">
+                    {% if list_1yr %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light"><tr><th>Date Due</th><th>Customer</th><th>Phone</th><th>Action</th></tr></thead>
+                            <tbody>
+                                {% for item in list_1yr %}
+                                <tr>
+                                    <td class="fw-bold text-danger">{{ item.due_date_1yr.strftime('%d-%b-%Y') }}</td>
+                                    <td>{{ item.service_customer.name }}</td>
+                                    <td>{{ item.service_customer.phone }}</td>
+                                    <td>
+                                        <a href="https://wa.me/91{{ item.service_customer.phone }}?text=Hello {{ item.service_customer.name }}, your 1-Year AMC is due on {{ item.due_date_1yr }}. Can we visit?" target="_blank" class="btn btn-sm btn-success"><i class="bi bi-whatsapp"></i></a>
+                                        <a href="{{ url_for('main.book_appointment', customer_id=item.service_customer.id) }}" class="btn btn-sm btn-primary">Book</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-center py-4 text-muted">No 1-year services due.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

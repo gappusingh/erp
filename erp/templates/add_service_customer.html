@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5" style="max-width: 600px;">
+    <div class="card shadow border-0">
+        <div class="card-header bg-dark text-white text-center py-3">
+            <h4 class="mb-0"><i class="bi bi-person-plus-fill"></i> Service Customer</h4>
+        </div>
+        <div class="card-body p-4 bg-light">
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                <div class="mb-3">
+                    {{ form.name.label(class="form-label fw-bold") }}
+                    {{ form.name(class="form-control form-control-lg") }}
+                </div>
+                <div class="mb-3">
+                    {{ form.phone.label(class="form-label fw-bold") }}
+                    {{ form.phone(class="form-control form-control-lg", placeholder="Enter Phone (Unique ID)") }}
+                    <div class="form-text">If this number exists, we will open the old file.</div>
+                </div>
+                <div class="mb-4">
+                    {{ form.address.label(class="form-label fw-bold") }}
+                    {{ form.address(class="form-control", rows=2) }}
+                </div>
+                <div class="d-grid">
+                    {{ form.submit(class="btn btn-warning btn-lg fw-bold") }}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,6 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, IntegerField, FloatField, SubmitField, SelectField, TextAreaField, DateField
-from wtforms.validators import DataRequired, NumberRange, Optional
+from wtforms.validators import DataRequired, NumberRange, Optional, Length
+
 
 class ProductForm(FlaskForm):
     """Form for adding/editing products"""
@@ -86,3 +87,81 @@ class DateRangeForm(FlaskForm):
     start_date = DateField('Start Date', validators=[DataRequired()])
     end_date = DateField('End Date', validators=[DataRequired()])
     submit = SubmitField('Generate Report')
+
+
+   # Add at the bottom of forms.py
+
+class ServiceCustomerForm(FlaskForm):
+    """Quick Add Form for Repair Customers"""
+    name = StringField('Customer Name', validators=[DataRequired()])
+    phone = StringField('Phone Number (Unique ID)', validators=[DataRequired()])
+    address = TextAreaField('Address / Location', validators=[DataRequired()])
+    submit = SubmitField('Save & Book')
+
+class ServiceRecordForm(FlaskForm):
+    # CHANGE: Logic will be handled in routes, but keep field definition
+    customer = SelectField('Customer', coerce=int, validators=[DataRequired()])
+    serviceman_name = StringField('Serviceman Name', validators=[DataRequired()])
+    issue_reported = TextAreaField('Issue Reported')
+    action_taken = TextAreaField('Action Taken / Parts Replaced')
+    service_charge = FloatField('Service Charge', default=0.0)
+    parts_cost = FloatField('Parts Cost', default=0.0)
+    next_service_due = SelectField('Next Service Due', choices=[
+        ('3', '3 Months'), 
+        ('6', '6 Months'), 
+        ('12', '1 Year')
+    ], validators=[DataRequired()])
+    submit = SubmitField('Save Job Card')
+
+
+
+
+class SearchForm(FlaskForm):
+    """Search form for the dashboard"""
+    search_query = StringField('Search by Name or Phone', validators=[DataRequired()])
+    submit = SubmitField('Search')
+
+
+class UnifiedServiceForm(FlaskForm):
+    """Smart Form: Handles both Customer Creation and Service Booking"""
+    
+    # --- 1. Customer Details ---
+    # The Phone Number is the KEY. The system watches this field.
+    customer_phone = StringField('Phone Number (Required)', validators=[DataRequired(), Length(min=10, max=15)])
+    customer_name = StringField('Customer Name', validators=[DataRequired()])
+    customer_address = TextAreaField('Address', validators=[DataRequired()])
+    
+    # --- 2. Service Job Details ---
+    # New: Date Picker to select today or past dates
+    service_date = DateField('Service Date', format='%Y-%m-%d', validators=[DataRequired()])
+    
+    serviceman_name = StringField('Technician Name', validators=[DataRequired()])
+    issue_reported = TextAreaField('Issue Reported', validators=[DataRequired()])
+    action_taken = TextAreaField('Action Taken')
+    
+    # Costs
+    service_charge = FloatField('Service Charge', default=0.0)
+    parts_cost = FloatField('Parts Cost', default=0.0)
+    
+    # # Reminder for Next Visit
+    # next_service_due = SelectField('Next Service Reminder', choices=[
+    #     ('3', '3 Months'), 
+    #     ('6', '6 Months'), 
+    #     ('12', '1 Year')
+    # ], validators=[DataRequired()])
+    
+    submit = SubmitField('Save Job Card')
+
+
+
+class BookingForm(FlaskForm):
+    """Form to schedule a NEW job"""
+    customer_phone = StringField('Phone Number', validators=[DataRequired(), Length(min=10, max=15)])
+    customer_name = StringField('Customer Name', validators=[DataRequired()])
+    address = TextAreaField('Address', validators=[DataRequired()])
+    
+    scheduled_date = DateField('Scheduled Date', format='%Y-%m-%d', validators=[DataRequired()])
+    scheduled_time = StringField('Preferred Time (Optional)')
+    issue_reported = TextAreaField('Issue Reported', validators=[DataRequired()])
+    
+    submit = SubmitField('Book Appointment')

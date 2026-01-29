@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 900px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-dark"><i class="bi bi-tools"></i> Record Service Job</h2>
+        <a href="{{ url_for('main.service_dashboard') }}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+
+    <form method="POST" class="card shadow-sm border-0">
+        {{ form.hidden_tag() }}
+        
+        <div class="card-body p-4">
+            
+            <div class="alert alert-light border border-primary mb-4">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <h5 class="text-primary fw-bold mb-3"><i class="bi bi-person-badge-fill"></i> Customer Details</h5>
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.customer_phone.label(class="form-label fw-bold") }}
+                        <div class="input-group">
+                            <span class="input-group-text bg-white"><i class="bi bi-telephone-fill text-primary"></i></span>
+                            {{ form.customer_phone(class="form-control form-control-lg", placeholder="Enter Phone Number") }}
+                        </div>
+                        <div class="form-text text-muted">
+                            <i class="bi bi-info-circle"></i> If number exists, we link to old history. If new, we create a profile.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.customer_name.label(class="form-label fw-bold") }}
+                        {{ form.customer_name(class="form-control form-control-lg", placeholder="Customer Name") }}
+                    </div>
+                    <div class="col-12">
+                        {{ form.customer_address.label(class="form-label fw-bold") }}
+                        {{ form.customer_address(class="form-control", rows=2, placeholder="Enter Location / Address") }}
+                    </div>
+                </div>
+            </div>
+
+            <h5 class="text-secondary border-bottom pb-2 mb-3"><i class="bi bi-wrench-adjustable"></i> Job Information</h5>
+            
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    {{ form.service_date.label(class="form-label fw-bold") }}
+                    {{ form.service_date(class="form-control", type="date") }}
+                </div>
+
+                <div class="col-md-4">
+                    {{ form.serviceman_name.label(class="form-label fw-bold") }}
+                    {{ form.serviceman_name(class="form-control") }}
+                </div>
+                
+                
+                <div class="col-12">
+                    {{ form.issue_reported.label(class="form-label fw-bold") }}
+                    {{ form.issue_reported(class="form-control", rows=2, placeholder="e.g. Filter Choked, Motor Noise") }}
+                </div>
+                
+                <div class="col-12">
+                    {{ form.action_taken.label(class="form-label fw-bold") }}
+                    {{ form.action_taken(class="form-control", rows=2, placeholder="e.g. Replaced Membrane, Serviced Motor") }}
+                </div>
+
+                <div class="col-md-6">
+                    {{ form.parts_cost.label(class="form-label fw-bold") }}
+                    <div class="input-group">
+                        <span class="input-group-text">₹</span>
+                        {{ form.parts_cost(class="form-control") }}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    {{ form.service_charge.label(class="form-label fw-bold") }}
+                    <div class="input-group">
+                        <span class="input-group-text">₹</span>
+                        {{ form.service_charge(class="form-control") }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-grid">
+                {{ form.submit(class="btn btn-success btn-lg fw-bold py-3 shadow-sm") }}
+            </div>
+
+        </div>
+    </form>
+</div>
+{% endblock %}

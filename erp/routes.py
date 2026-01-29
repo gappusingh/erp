@@ -1,15 +1,25 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, session, request, Response
+# Ensure ServiceRecord is imported here
 from .models import (db, Product, Customer, Supplier, Invoice, InvoiceItem, Payment, 
                     SupplierPayment, PurchaseOrder, PurchaseOrderItem, Expense, 
-                    DeliveryChallan, ChallanItem, PricingTier, Account, JournalEntry, LedgerEntry)
+                    DeliveryChallan, ChallanItem, PricingTier, Account, JournalEntry, LedgerEntry,
+                    ServiceRecord, ServiceCustomer) # <--- Added ServiceCustomer
+
 from .forms import (ProductForm, CustomerForm, SupplierForm, PaymentForm, SupplierPaymentForm,
-                  ExpenseForm, PricingTierForm, DateRangeForm)
+                   ExpenseForm, PricingTierForm, DateRangeForm, 
+                   ServiceRecordForm, SearchForm, ServiceCustomerForm, UnifiedServiceForm) # <--- Added ServiceCustomerForm
 from sqlalchemy import func, extract
 from datetime import date, datetime, timedelta
 from weasyprint import HTML
+import io
+import base64
+from matplotlib.figure import Figure
+from .models import ServiceBooking # ... other imports
+from .forms import BookingForm
 
-
+# FIX: Ensure double underscores are used here: __name__
 bp = Blueprint('main', __name__)
+
 
 # ============ DASHBOARD ============
 @bp.route('/')
@@ -640,7 +650,7 @@ def download_summary_report():
     
     return Response(pdf,
                   mimetype='application/pdf',
-                  headers={'Content-Disposition': f'inline; filename=Business_Report_{start_date.date()}_to_{end_date.date()}.pdf'})
+                  headers={'Content-Disposition': f'inline; filename=Business_Report_{start_date.date()}to{end_date.date()}.pdf'})
 
 @bp.route('/reports/balance-sheet')
 def balance_sheet():
@@ -885,3 +895,297 @@ def create_payment_journal_entry(payment):
             ))
     except Exception as e:
         print(f"Journal entry creation failed: {e}")
+
+# ==========================================
+#      NEW SERVICE & REPAIR SECTION (SMART ID)
+# ==========================================
+
+@bp.route('/service-dashboard', methods=['GET', 'POST'])
+def service_dashboard():
+    """The Separate 'Room' for Repair & Service Management"""
+    today = date.today()
+    search_form = SearchForm()
+    
+    # 1. Handle Search
+    if search_form.validate_on_submit():
+        query = search_form.search_query.data.strip()
+        found_customers = ServiceCustomer.query.filter(
+            (ServiceCustomer.phone.ilike(f'%{query}%')) | 
+            (ServiceCustomer.name.ilike(f'%{query}%'))
+        ).all()
+        return render_template('service_search_results.html', customers=found_customers, query=query)
+    
+    # === LOGIC FIX: Get only the LATEST record for each customer ===
+    
+    # A. Subquery to find the latest job ID for each customer
+    latest_jobs_subquery = db.session.query(
+        func.max(ServiceRecord.id).label('max_id')
+    ).group_by(ServiceRecord.service_customer_id).subquery()
+
+    # B. Filter: Show if 6mo date OR 1yr date is within next 30 days
+    alert_limit = today + timedelta(days=30)
+    
+    # UPDATED QUERY: We now look at due_date_6mo OR due_date_1yr
+    upcoming_services = ServiceRecord.query.join(
+        latest_jobs_subquery,
+        ServiceRecord.id == latest_jobs_subquery.c.max_id
+    ).filter(
+        (ServiceRecord.due_date_6mo <= alert_limit) | 
+        (ServiceRecord.due_date_1yr <= alert_limit)
+    ).all()
+    
+    # 3. Recent Repairs List
+    recent_repairs = ServiceRecord.query.order_by(ServiceRecord.service_date.desc()).limit(10).all()
+    
+    return render_template('dashboard_service.html',
+                           search_form=search_form,
+                           upcoming_services=upcoming_services,
+                           recent_repairs=recent_repairs,
+                           today=today,              # <--- ADD THIS
+                           alert_limit=alert_limit)
+
+# @bp.route('/service/add-customer', methods=['GET', 'POST'])
+# def add_service_customer():
+#     """Smart Add: Detects existing phone numbers to prevent duplicates"""
+#     form = ServiceCustomerForm()
+    
+#     if form.validate_on_submit():
+#         phone_number = form.phone.data.strip()
+        
+#         # === SMART LOGIC: Check uniqueness ===
+#         existing_customer = ServiceCustomer.query.filter_by(phone=phone_number).first()
+        
+#         if existing_customer:
+#             # If found, DO NOT create new. Redirect to existing profile.
+#             flash(f'Found existing customer: {existing_customer.name}. Opening their file.', 'info')
+#             return redirect(url_for('main.add_service_record', customer_id=existing_customer.id))
+            
+#         # If not found, Create New
+#         new_customer = ServiceCustomer(
+#             name=form.name.data,
+#             phone=phone_number,
+#             address=form.address.data
+#         )
+#         db.session.add(new_customer)
+#         db.session.commit()
+#         flash(f'New Service Customer {new_customer.name} added!', 'success')
+#         return redirect(url_for('main.add_service_record', customer_id=new_customer.id))
+        
+#     return render_template('add_service_customer.html', form=form)
+
+# In erp/routes.py
+
+@bp.route('/service/new', methods=['GET', 'POST'])
+def add_service_record():
+    form = UnifiedServiceForm()
+    
+    # Pre-fill Date with Today (so the user doesn't have to pick if it's today)
+    if request.method == 'GET':
+        form.service_date.data = date.today()
+        
+        # If we clicked "Call" or "Book" on a specific customer, pre-fill their info
+        if request.args.get('customer_id'):
+            existing = ServiceCustomer.query.get(int(request.args.get('customer_id')))
+            if existing:
+                form.customer_phone.data = existing.phone
+                form.customer_name.data = existing.name
+                form.customer_address.data = existing.address
+
+    if form.validate_on_submit():
+        # 1. Get the Phone Number (The Unique Key)
+        phone_input = form.customer_phone.data.strip()
+        
+        # 2. DATABASE CHECK: Does this person exist?
+        customer = ServiceCustomer.query.filter_by(phone=phone_input).first()
+        
+        if customer:
+            # === PATH A: EXISTING CUSTOMER ===
+            # The phone number matches an existing ID.
+            # We LINK this new job to that EXISTING ID.
+            flash(f'Welcome back! Adding service to existing history for {customer.name}.', 'info')
+            
+            # Optional: Update address if they moved
+            customer.address = form.customer_address.data
+            db.session.commit()
+            
+        else:
+            # === PATH B: NEW CUSTOMER ===
+            # Phone number is new. Create a BRAND NEW Profile ID.
+            customer = ServiceCustomer(
+                name=form.customer_name.data,
+                phone=phone_input,
+                address=form.customer_address.data
+            )
+            db.session.add(customer)
+            db.session.commit() # Commit now to generate the new ID
+            flash(f'New Customer Profile created for {customer.name}!', 'success')
+
+        # 3. CREATE SERVICE RECORD
+        # Now we have a 'customer.id' (either old or new). We attach the job to it.
+        
+        # Calculate Next Due Date based on the SELECTED Service Date
+        job_date = form.service_date.data
+        # months = int(form.next_service_due.data)
+        # next_due = job_date + timedelta(days=months*30)
+
+        # === NEW LOGIC: Auto-calculate 6 months and 1 year ===
+        date_6mo = job_date + timedelta(days=180)           # <--- NEW
+        date_1yr = job_date + timedelta(days=365)           # <--- NEW
+        
+        total = form.service_charge.data + form.parts_cost.data
+        
+        service = ServiceRecord(
+            service_customer_id=customer.id, # <--- The Magic Link
+            service_date=job_date,
+            serviceman_name=form.serviceman_name.data,
+            issue_reported=form.issue_reported.data,
+            action_taken=form.action_taken.data,
+            service_charge=form.service_charge.data,
+            parts_cost=form.parts_cost.data,
+            total_cost=total,
+            # next_service_date=next_due
+            due_date_6mo=date_6mo,                          # <--- NEW
+            due_date_1yr=date_1yr                           # <--- NEW
+        )
+        
+        db.session.add(service)
+        db.session.commit()
+        
+        return redirect(url_for('main.service_dashboard'))
+        
+    return render_template('add_service_unified.html', form=form)
+
+@bp.route('/service/history/<int:customer_id>')
+def customer_service_history(customer_id):
+    """View complete repair history for a specific ServiceCustomer"""
+    customer = ServiceCustomer.query.get_or_404(customer_id)
+    # Fetch all records for this unique phone number ID
+    services = ServiceRecord.query.filter_by(service_customer_id=customer_id).order_by(ServiceRecord.service_date.desc()).all()
+    return render_template('service_history.html', customer=customer, services=services)
+
+
+
+@bp.route('/service/book-appointment', methods=['GET', 'POST'])
+def book_appointment():
+    form = BookingForm()
+    
+    # === NEW: Pre-fill logic starts here ===
+    if request.method == 'GET':
+        form.scheduled_date.data = date.today()
+        
+        # Check if we clicked "Book Now" from the dashboard
+        customer_id = request.args.get('customer_id')
+        if customer_id:
+            customer = ServiceCustomer.query.get(customer_id)
+            if customer:
+                # Fill the form with their data automatically
+                form.customer_name.data = customer.name
+                form.customer_phone.data = customer.phone
+                form.address.data = customer.address
+    # =======================================
+
+    if form.validate_on_submit():
+        booking = ServiceBooking(
+            customer_name=form.customer_name.data,
+            customer_phone=form.customer_phone.data,
+            address=form.address.data,
+            scheduled_date=form.scheduled_date.data,
+            scheduled_time=form.scheduled_time.data,
+            issue_reported=form.issue_reported.data,
+            status='Pending'
+        )
+        db.session.add(booking)
+        db.session.commit()
+        flash('Appointment Booked Successfully!', 'success')
+        return redirect(url_for('main.list_bookings'))
+        
+    return render_template('book_appointment.html', form=form)
+
+# 2. LIST ALL PENDING BOOKINGS
+@bp.route('/service/bookings')
+def list_bookings():
+    # Show Pending jobs first, ordered by date
+    bookings = ServiceBooking.query.filter_by(status='Pending').order_by(ServiceBooking.scheduled_date.asc()).all()
+    return render_template('bookings_list.html', bookings=bookings)
+
+# 3. COMPLETE A JOB (The "Magic" Step)
+@bp.route('/service/complete-booking/<int:booking_id>', methods=['GET', 'POST'])
+def complete_booking(booking_id):
+    booking = ServiceBooking.query.get_or_404(booking_id)
+    form = UnifiedServiceForm()
+
+    # PRE-FILL Form with Booking Data
+    if request.method == 'GET':
+        form.customer_phone.data = booking.customer_phone
+        form.customer_name.data = booking.customer_name
+        form.customer_address.data = booking.address
+        form.issue_reported.data = booking.issue_reported
+        form.service_date.data = date.today()
+
+    if form.validate_on_submit():
+        # A. Handle Customer (Find or Create)
+        phone_input = form.customer_phone.data.strip()
+        customer = ServiceCustomer.query.filter_by(phone=phone_input).first()
+        
+        if not customer:
+            customer = ServiceCustomer(
+                name=form.customer_name.data,
+                phone=phone_input,
+                address=form.customer_address.data
+            )
+            db.session.add(customer)
+            db.session.commit()
+
+        # B. Create the Permanent Service Record
+        # months = int(form.next_service_due.data)
+        # next_due = form.service_date.data + timedelta(days=months*30)
+        job_date = form.service_date.data
+        date_6mo = job_date + timedelta(days=180)           # <--- NEW
+        date_1yr = job_date + timedelta(days=365)           # <--- NEW
+        total = form.service_charge.data + form.parts_cost.data
+        
+        service = ServiceRecord(
+            service_customer_id=customer.id,
+            service_date=form.service_date.data,
+            serviceman_name=form.serviceman_name.data,
+            issue_reported=form.issue_reported.data,
+            action_taken=form.action_taken.data,
+            service_charge=form.service_charge.data,
+            parts_cost=form.parts_cost.data,
+            total_cost=total,
+            # next_service_date=next_due
+
+            due_date_6mo=date_6mo,                          # <--- NEW
+            due_date_1yr=date_1yr                           # <--- NEW
+        )
+        db.session.add(service)
+        
+        # C. Mark Booking as Completed
+        booking.status = 'Completed'
+        
+        db.session.commit()
+        flash('Job Completed and History Updated!', 'success')
+        return redirect(url_for('main.service_dashboard'))
+
+    return render_template('add_service_unified.html', form=form, title="Complete Job")
+
+@bp.route('/service/reminders')
+def service_reminders():
+    """Show separate lists for 6-month and 1-year dues"""
+    today = date.today()
+    alert_window = today + timedelta(days=30) # Show anyone due in next 30 days
+    
+    # 1. Fetch 6-Month Dues (Due soon OR Overdue)
+    # We check if due_date_6mo is BEFORE the alert window AND not too old (optional)
+    list_6mo = ServiceRecord.query.filter(
+        ServiceRecord.due_date_6mo <= alert_window,
+        ServiceRecord.due_date_6mo >= (today - timedelta(days=60)) # Don't show extremely old ones
+    ).order_by(ServiceRecord.due_date_6mo.asc()).all()
+    
+    # 2. Fetch 1-Year Dues
+    list_1yr = ServiceRecord.query.filter(
+        ServiceRecord.due_date_1yr <= alert_window,
+        ServiceRecord.due_date_1yr >= (today - timedelta(days=60))
+    ).order_by(ServiceRecord.due_date_1yr.asc()).all()
+
+    return render_template('service_reminders.html', list_6mo=list_6mo, list_1yr=list_1yr)
