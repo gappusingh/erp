@@ -33,6 +33,31 @@
         max-height: 600px;
         overflow-y: auto;
       }
+
+      /* Dashboard Section Redesign Utilities */
+      .bg-soft-danger { background-color: #fff5f5; }
+      .text-danger-strong { color: #dc2626; }
+      .text-success-strong { color: #16a34a; }
+      .card-modern {
+        border: 1px solid rgba(0,0,0,0.05);
+        border-radius: 12px;
+      }
+      .btn-soft-primary {
+        background-color: #f8fafc;
+        color: #2563eb;
+        border: 1px solid rgba(0,0,0,0.02);
+        transition: all 0.2s;
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+      .btn-soft-primary:hover {
+        background-color: #eff6ff;
+        color: #1d4ed8;
+      }
+      .progress-thin {
+        height: 4px;
+        border-radius: 2px;
+      }
     </style>
   </head>
   <body>
@@ -61,6 +86,7 @@
                 <i class="bi bi-database"></i> Master Data
               </a>
               <ul class="dropdown-menu">
+                {% if current_user.role in ['Admin', 'Manager'] %}
                 <li>
                   <a
                     class="dropdown-item"
@@ -69,6 +95,7 @@
                     <i class="bi bi-box"></i> Add Product</a
                   >
                 </li>
+                {% endif %}
                 <li>
                   <a
                     class="dropdown-item"
@@ -76,6 +103,17 @@
                   >
                     <i class="bi bi-list-ul"></i> Products List</a
                   >
+                </li>
+                <li><hr class="dropdown-divider" /></li>
+                {% if current_user.role in ['Admin', 'Manager', 'Sales'] %}
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('main.categories_list') }}"
+                  >
+                    <i class="bi bi-tags"></i> Categories</a
+                  >
+                </li>
                 </li>
                 <li><hr class="dropdown-divider" /></li>
                 <li>
@@ -89,11 +127,22 @@
                 <li>
                   <a
                     class="dropdown-item"
+                    href="{{ url_for('main.customers_list') }}"
+                  >
+                    <i class="bi bi-list-ul"></i> Customers List</a
+                  >
+                </li>
+                {% endif %}
+                {% if current_user.role in ['Admin', 'Manager'] %}
+                <li>
+                  <a
+                    class="dropdown-item"
                     href="{{ url_for('main.add_supplier') }}"
                   >
                     <i class="bi bi-building"></i> Add Supplier</a
                   >
                 </li>
+                {% endif %}
                 <li>
                   <a
                     class="dropdown-item"
@@ -104,6 +153,57 @@
                 </li>
               </ul>
             </li>
+
+            <!-- NEW: Warehouse & Stock Dropdown -->
+            <li class="nav-item dropdown">
+               <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                  <i class="bi bi-boxes"></i> Warehouse & Stock
+               </a>
+               <ul class="dropdown-menu">
+                   <li>
+                       <a class="dropdown-item" href="{{ url_for('main.warehouses_list') }}">
+                           <i class="bi bi-house-door"></i> Manage Warehouses
+                       </a>
+                   </li>
+                   <li><hr class="dropdown-divider"></li>
+                   <li>
+                       <a class="dropdown-item" href="{{ url_for('main.low_stock_alerts') }}">
+                           <i class="bi bi-exclamation-triangle"></i> Low Stock Alerts
+                       </a>
+                   </li>
+                   <li>
+                       <a class="dropdown-item" href="{{ url_for('main.warehouse_distribution') }}">
+                           <i class="bi bi-stack"></i> Stock Distribution
+                       </a>
+                   </li>
+               </ul>
+            </li>
+            
+            <!-- NEW: Sales & CRM Dropdown -->
+            <li class="nav-item dropdown">
+               <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                  <i class="bi bi-briefcase"></i> Sales & CRM
+               </a>
+               <ul class="dropdown-menu">
+                   <li>
+                       <a class="dropdown-item" href="{{ url_for('main.leads_list') }}">
+                           <i class="bi bi-person-lines-fill"></i> Leads Management
+                       </a>
+                   </li>
+                   <li>
+                       <a class="dropdown-item" href="{{ url_for('main.quotations_list') }}">
+                           <i class="bi bi-file-earmark-text"></i> Quotations
+                       </a>
+                   </li>
+                   <li><hr class="dropdown-divider"></li>
+                   <li>
+                       <a class="dropdown-item" href="{{ url_for('main.price_lists') }}">
+                           <i class="bi bi-tags"></i> Price Lists
+                       </a>
+                   </li>
+               </ul>
+            </li>
+
             <li class="nav-item dropdown">
               <a
                 class="nav-link dropdown-toggle"
@@ -114,6 +214,7 @@
                 <i class="bi bi-cash-stack"></i> Transactions
               </a>
               <ul class="dropdown-menu">
+                {% if current_user.role in ['Admin', 'Manager', 'Sales'] %}
                 <li>
                   <a
                     class="dropdown-item"
@@ -130,7 +231,9 @@
                     <i class="bi bi-cash-coin"></i> Record Payment</a
                   >
                 </li>
+                {% endif %}
                 <li><hr class="dropdown-divider" /></li>
+                {% if current_user.role in ['Admin', 'Manager', 'Accountant'] %}
                 <li>
                   <a
                     class="dropdown-item"
@@ -147,7 +250,9 @@
                     <i class="bi bi-credit-card"></i> Pay Supplier</a
                   >
                 </li>
+                {% endif %}
                 <li><hr class="dropdown-divider" /></li>
+                {% if current_user.role in ['Admin', 'Accountant', 'Manager'] %}
                 <li>
                   <a
                     class="dropdown-item"
@@ -156,6 +261,7 @@
                     <i class="bi bi-file-text"></i> Record Expense</a
                   >
                 </li>
+                {% endif %}
                 <li>
                   <a
                     class="dropdown-item"
@@ -175,6 +281,7 @@
                 </li>
               </ul>
             </li>
+            {% if current_user.role in ['Admin', 'Accountant'] %}
             <li class="nav-item dropdown">
               <a
                 class="nav-link dropdown-toggle"
@@ -212,6 +319,8 @@
                 </li>
               </ul>
             </li>
+            {% endif %}
+            {% if current_user.role in ['Admin', 'Manager'] %}
             <li class="nav-item dropdown">
               <a
                 class="nav-link dropdown-toggle"
@@ -225,13 +334,42 @@
                 <li>
                   <a
                     class="dropdown-item"
-                    href="{{ url_for('main.pricing_tiers') }}"
+                    href="{{ url_for('main.price_lists') }}"
                   >
-                    <i class="bi bi-tags"></i> Pricing Tiers</a
+                    <i class="bi bi-tags"></i> Price Lists</a
                   >
                 </li>
+                {% if current_user.role == 'Admin' %}
+                <li><hr class="dropdown-divider" /></li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('main.audit_logs') }}"
+                  >
+                    <i class="bi bi-shield-check"></i> Audit Logs</a
+                  >
+                </li>
+                {% endif %}
               </ul>
             </li>
+            {% endif %}
+          </ul>
+          <ul class="navbar-nav ms-auto">
+            {% if current_user.is_authenticated %}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                <i class="bi bi-person-circle"></i> {{ current_user.username }} 
+                <span class="badge bg-secondary ms-1">{{ current_user.role }}</span>
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="{{ url_for('main.logout') }}"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
+              </ul>
+            </li>
+            {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.login') }}"><i class="bi bi-box-arrow-in-right"></i> Login</a>
+            </li>
+            {% endif %}
           </ul>
         </div>
       </div>

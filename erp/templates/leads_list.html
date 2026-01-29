@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Lead Management{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-person-lines-fill"></i> Leads (Potential Customers)</h2>
+    <a href="{{ url_for('main.add_lead') }}" class="btn btn-primary">
+        <i class="bi bi-person-plus"></i> Add New Lead
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Created</th>
+                        <th>Name / Business</th>
+                        <th>Contact info</th>
+                        <th>Status</th>
+                        <th>Notes</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lead in leads %}
+                    <tr>
+                        <td class="small text-muted">{{ lead.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            <strong>{{ lead.name }}</strong><br>
+                            <small class="text-muted">{{ lead.business_name if lead.business_name else '-' }}</small>
+                        </td>
+                        <td>
+                            <i class="bi bi-telephone fs-6"></i> {{ lead.phone }}<br>
+                            {% if lead.email %}<i class="bi bi-envelope fs-6"></i> {{ lead.email }}{% endif %}
+                        </td>
+                        <td>
+                            {% if lead.status == 'New' %}
+                                <span class="badge bg-info text-dark">New</span>
+                            {% elif lead.status == 'Contacted' %}
+                                <span class="badge bg-primary">Contacted</span>
+                            {% elif lead.status == 'Interested' %}
+                                <span class="badge bg-warning text-dark">Interested</span>
+                            {% elif lead.status == 'Converted' %}
+                                <span class="badge bg-success">Converted</span>
+                            {% elif lead.status == 'Lost' %}
+                                <span class="badge bg-secondary">Lost</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ lead.notes }}</td>
+                        <td class="text-end">
+                            {% if lead.status != 'Converted' %}
+                            <a href="{{ url_for('main.convert_lead', id=lead.id) }}" class="btn btn-sm btn-outline-success" 
+                               onclick="return confirm('Convert this lead to an active Customer?')">
+                                <i class="bi bi-check-circle"></i> Convert to Customer
+                            </a>
+                            {% else %}
+                            <span class="text-success small"><i class="bi bi-check-all"></i> Registered</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">No leads found. Start tracking potential customers!</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,28 +1,106 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, session, request, Response
+from flask_login import login_user, logout_user, login_required, current_user
 # Ensure ServiceRecord is imported here
 from .models import (db, Product, Customer, Supplier, Invoice, InvoiceItem, Payment, 
                     SupplierPayment, PurchaseOrder, PurchaseOrderItem, Expense, 
-                    DeliveryChallan, ChallanItem, PricingTier, Account, JournalEntry, LedgerEntry,
-                    ServiceRecord, ServiceCustomer) # <--- Added ServiceCustomer
+                    DeliveryChallan, ChallanItem, PriceList, Account, JournalEntry, LedgerEntry,
+                    ServiceRecord, ServiceCustomer, User, AuditLog, 
+                    Category, Warehouse, ProductStock, ProductSerialNumber, Lead, Quotation, QuotationItem, SalesReturn, PriceListItem)
 
 from .forms import (ProductForm, CustomerForm, SupplierForm, PaymentForm, SupplierPaymentForm,
-                   ExpenseForm, PricingTierForm, DateRangeForm, 
-                   ServiceRecordForm, SearchForm, ServiceCustomerForm, UnifiedServiceForm) # <--- Added ServiceCustomerForm
+                   ExpenseForm, PriceListForm, DateRangeForm, 
+                   ServiceRecordForm, SearchForm, ServiceCustomerForm, UnifiedServiceForm,
+                   LoginForm, CategoryForm, WarehouseForm, LeadForm)
+
+# ... (rest of imports and code) ...
+
+
 from sqlalchemy import func, extract
 from datetime import date, datetime, timedelta
 from weasyprint import HTML
 import io
 import base64
 from matplotlib.figure import Figure
-from .models import ServiceBooking # ... other imports
+from .models import ServiceBooking
 from .forms import BookingForm
+from .utils import log_event
+from functools import wraps
+from flask import abort
 
 # FIX: Ensure double underscores are used here: __name__
 bp = Blueprint('main', __name__)
 
+def role_required(roles):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated or current_user.role not in roles:
+                abort(403)
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+# ============ CUSTOMER MANAGEMENT ============
+@bp.route('/add/customer', methods=['GET', 'POST'])
+def add_customer():
+    """Add new customer"""
+    form = CustomerForm()
+    form.price_list.choices = [(0, 'None')] + [(p.id, p.name) for p in PriceList.query.all()]
+    
+    if form.validate_on_submit():
+        customer = Customer(
+            name=form.name.data,
+            gstin=form.gstin.data,
+            state_code=form.state_code.data,
+            address=form.address.data,
+            phone=form.phone.data,
+            price_list_id=form.price_list.data if form.price_list.data != 0 else None
+        )
+        db.session.add(customer)
+        db.session.commit()
+        flash(f'Customer {form.name.data} added successfully!', 'success')
+        return redirect(url_for('main.dashboard'))
+    return render_template('_form_renderer.html', form=form, title="Add New Customer")
+
+from functools import wraps
+from flask import abort
+
+def role_required(roles):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated or current_user.role not in roles:
+                abort(403)
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+@bp.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        if user is None or not user.check_password(form.password.data):
+            flash('Invalid username or password', 'danger')
+            return redirect(url_for('main.login'))
+        login_user(user)
+        log_event("User Login", details=f"User {user.username} logged in")
+        db.session.commit()
+        next_page = request.args.get('next')
+        return redirect(next_page) if next_page else redirect(url_for('main.dashboard'))
+    return render_template('_form_renderer.html', form=form, title="Login")
+
+@bp.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('main.login'))
+
 
 # ============ DASHBOARD ============
 @bp.route('/')
+@login_required
 def dashboard():
     """Main dashboard with financial summary and customer cards"""
     today = date.today()
@@ -55,60 +133,195 @@ def dashboard():
     
     
 
+    # Inventory Alerts
+    low_stock_products = Product.query.filter(Product.stock <= Product.reorder_level).all()
+    
+    # Warehouse Summaries
+    warehouses = Warehouse.query.all()
+    for wh in warehouses:
+        wh.total_stock = db.session.query(func.sum(ProductStock.quantity)).filter(
+            ProductStock.warehouse_id == wh.id).scalar() or 0
+
     return render_template('dashboard.html',
                          collections_today=total_collections_today,
                          credit_today=total_credit_today,
                          market_due=total_market_due,
                          supplier_due=total_supplier_due,
-                         customers=customers)
+                         customers=customers,
+                         low_stock=low_stock_products,
+                         warehouses=warehouses)
 
 # ============ PRODUCT MANAGEMENT ============
 @bp.route('/add/product', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Manager'])
 def add_product():
-    """Add new product to inventory"""
+    """Add new product to inventory with advanced fields"""
     form = ProductForm()
+    form.category.choices = [(0, 'None')] + [(c.id, c.name) for c in Category.query.all()]
+    
     if form.validate_on_submit():
         product = Product(
             name=form.name.data,
             sku=form.sku.data,
             hsn_code=form.hsn_code.data,
-            stock=form.stock.data,
+            category_id=form.category.data if form.category.data != 0 else None,
             purchase_price=form.purchase_price.data,
-            sale_price=form.sale_price.data
+            sale_price=form.sale_price.data,
+            uom_purchase=form.uom_purchase.data,
+            uom_sale=form.uom_sale.data,
+            uom_conversion=form.uom_conversion.data,
+            reorder_level=form.reorder_level.data,
+            stock=form.stock.data
         )
         db.session.add(product)
+        db.session.flush() # Get product ID
+        
+        # Initialize stock in Main Warehouse
+        main_wh = Warehouse.query.filter_by(name='Main Warehouse').first()
+        if main_wh:
+            stock_entry = ProductStock(
+                product_id=product.id,
+                warehouse_id=main_wh.id,
+                quantity=form.stock.data
+            )
+            db.session.add(stock_entry)
+            
+        log_event("Created Product", resource_type="Product", details=f"Product {product.name} (SKU: {product.sku}) added")
         db.session.commit()
         flash(f'Product {form.name.data} added successfully!', 'success')
         return redirect(url_for('main.products_list'))
     return render_template('_form_renderer.html', form=form, title="Add New Product")
 
+# ============ CATEGORY MANAGEMENT ============
+@bp.route('/categories')
+@login_required
+def categories_list():
+    """List all product categories"""
+    categories = Category.query.all()
+    return render_template('categories_list.html', categories=categories)
+
+@bp.route('/add/category', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Manager'])
+def add_category():
+    """Add new category"""
+    form = CategoryForm()
+    if form.validate_on_submit():
+        category = Category(name=form.name.data, description=form.description.data)
+        db.session.add(category)
+        db.session.commit()
+        flash('Category added successfully!', 'success')
+        return redirect(url_for('main.categories_list'))
+    return render_template('_form_renderer.html', form=form, title="Add Category")
+
+# ============ WAREHOUSE MANAGEMENT ============
+@bp.route('/warehouses')
+@login_required
+def warehouses_list():
+    """List all warehouses"""
+    warehouses = Warehouse.query.all()
+    return render_template('warehouses_list.html', warehouses=warehouses)
+
+@bp.route('/add/warehouse', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Manager'])
+def add_warehouse():
+    """Add new warehouse"""
+    form = WarehouseForm()
+    if form.validate_on_submit():
+        warehouse = Warehouse(name=form.name.data, location=form.location.data)
+        db.session.add(warehouse)
+        db.session.commit()
+        flash('Warehouse added successfully!', 'success')
+        return redirect(url_for('main.warehouses_list'))
+    return render_template('_form_renderer.html', form=form, title="Add Warehouse")
+
 @bp.route('/products')
 def products_list():
-    """List all products"""
+    """List all products with basic inventory info"""
     products = Product.query.order_by(Product.name).all()
     return render_template('products_list.html', products=products)
 
-# ============ CUSTOMER MANAGEMENT ============
-@bp.route('/add/customer', methods=['GET', 'POST'])
-def add_customer():
-    """Add new customer"""
-    form = CustomerForm()
-    form.pricing_tier.choices = [(0, 'None')] + [(t.id, t.name) for t in PricingTier.query.all()]
+@bp.route('/edit/product/<int:id>', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Manager'])
+def edit_product(id):
+    """Edit existing product details"""
+    product = Product.query.get_or_404(id)
+    form = ProductForm(obj=product)
+    form.category.choices = [(0, 'None')] + [(c.id, c.name) for c in Category.query.all()]
     
+    if request.method == 'GET':
+        form.category.data = product.category_id or 0
+        form.stock.data = product.stock # Initial stock is shown, but usually stock is managed via transactions
+
     if form.validate_on_submit():
-        customer = Customer(
-            name=form.name.data,
-            gstin=form.gstin.data,
-            state_code=form.state_code.data,
-            address=form.address.data,
-            phone=form.phone.data,
-            pricing_tier_id=form.pricing_tier.data if form.pricing_tier.data != 0 else None
-        )
-        db.session.add(customer)
+        product.name = form.name.data
+        product.sku = form.sku.data
+        product.hsn_code = form.hsn_code.data
+        product.category_id = form.category.data if form.category.data != 0 else None
+        product.purchase_price = form.purchase_price.data
+        product.sale_price = form.sale_price.data
+        product.uom_purchase = form.uom_purchase.data
+        product.uom_sale = form.uom_sale.data
+        product.uom_conversion = form.uom_conversion.data
+        product.reorder_level = form.reorder_level.data
+        
+        # Updating total stock manually is risky, but for now we follow the form
+        product.stock = form.stock.data
+        
         db.session.commit()
-        flash(f'Customer {form.name.data} added successfully!', 'success')
-        return redirect(url_for('main.dashboard'))
-    return render_template('_form_renderer.html', form=form, title="Add New Customer")
+        flash(f'Product {product.name} updated!', 'success')
+        return redirect(url_for('main.products_list'))
+        
+    return render_template('_form_renderer.html', form=form, title=f"Edit Product: {product.name}")
+
+@bp.route('/product/<int:product_id>/serials')
+@login_required
+def product_serials(product_id):
+    """View all serial numbers for a product"""
+    product = Product.query.get_or_404(product_id)
+    serials = ProductSerialNumber.query.filter_by(product_id=product_id).order_by(ProductSerialNumber.created_at.desc()).all()
+    return render_template('product_serials.html', product=product, serials=serials)
+
+@bp.route('/product/<int:product_id>/add-serial', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Manager'])
+def add_serial(product_id):
+    """Manually add a serial number (for testing/setup)"""
+    product = Product.query.get_or_404(product_id)
+    if request.method == 'POST':
+        sn = request.form.get('serial_number')
+        wh_id = request.form.get('warehouse_id')
+        
+        if not sn:
+            flash('Serial number is required', 'danger')
+        elif ProductSerialNumber.query.filter_by(serial_number=sn).first():
+            flash('This serial number already exists!', 'warning')
+        else:
+            serial = ProductSerialNumber(
+                product_id=product_id,
+                serial_number=sn,
+                warehouse_id=wh_id if wh_id else None,
+                status='Available'
+            )
+            db.session.add(serial)
+            db.session.commit()
+            flash(f'Serial number {sn} added to {product.name}', 'success')
+            return redirect(url_for('main.product_serials', product_id=product_id))
+            
+    warehouses = Warehouse.query.all()
+    return render_template('add_serial.html', product=product, warehouses=warehouses)
+
+# ============ CUSTOMER MANAGEMENT ============
+
+@bp.route('/customers')
+@login_required
+def customers_list():
+    """List all customers"""
+    customers = Customer.query.order_by(Customer.name).all()
+    return render_template('customers_list.html', customers=customers)
 
 @bp.route('/customer/<int:customer_id>/statement')
 def view_statement(customer_id):
@@ -216,6 +429,7 @@ def create_invoice():
             # Create journal entry for double-entry accounting
             create_invoice_journal_entry(new_invoice, subtotal)
             
+            log_event("Created Invoice", resource_type="Invoice", resource_id=new_invoice.id, details=f"Invoice {new_invoice.invoice_number} created for customer {customer.name}. Amount: ₹{new_invoice.total_amount}")
             db.session.commit()
             session.pop('cart', None)
             
@@ -283,6 +497,8 @@ def clear_cart():
 
 # ============ PAYMENT RECORDING ============
 @bp.route('/add/payment', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Manager', 'Sales'])
 def add_payment():
     """Record customer payment"""
     form = PaymentForm()
@@ -317,6 +533,7 @@ def add_payment():
             # Create journal entry
             create_payment_journal_entry(new_payment)
             
+            log_event("Recorded Payment", resource_type="Payment", resource_id=new_payment.id, details=f"Payment of ₹{amount:.2f} recorded for {customer.name}")
             db.session.commit()
             flash(f'Payment of ₹{amount:.2f} recorded for {customer.name}!', 'success')
             return redirect(url_for('main.dashboard'))
@@ -352,6 +569,8 @@ def suppliers_list():
     return render_template('suppliers_list.html', suppliers=suppliers)
 
 @bp.route('/purchasing/po/new', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Manager', 'Accountant'])
 def create_purchase_order():
     """Create purchase order (simplified single-item version)"""
     if request.method == 'POST':
@@ -461,6 +680,8 @@ def add_supplier_payment():
 
 # ============ EXPENSE TRACKING ============
 @bp.route('/add/expense', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Accountant', 'Manager'])
 def add_expense():
     """Record business expense"""
     form = ExpenseForm()
@@ -472,6 +693,7 @@ def add_expense():
             payment_mode=form.payment_mode.data
         )
         db.session.add(expense)
+        log_event("Recorded Expense", resource_type="Expense", resource_id=expense.id, details=f"Expense of ₹{expense.amount:.2f} recorded for {form.description.data}")
         db.session.commit()
         flash(f'Expense of ₹{form.amount.data:.2f} recorded!', 'success')
         return redirect(url_for('main.expenses_list'))
@@ -494,6 +716,8 @@ def expenses_list():
 
 # ============ REPORTS ============
 @bp.route('/reports/profit-and-loss', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Accountant'])
 def profit_and_loss():
     """Generate Profit & Loss statement"""
     form = DateRangeForm()
@@ -653,6 +877,8 @@ def download_summary_report():
                   headers={'Content-Disposition': f'inline; filename=Business_Report_{start_date.date()}to{end_date.date()}.pdf'})
 
 @bp.route('/reports/balance-sheet')
+@login_required
+@role_required(['Admin', 'Accountant'])
 def balance_sheet():
     """Generate Balance Sheet"""
     # Assets
@@ -679,6 +905,8 @@ def balance_sheet():
                          total_equity=total_equity)
 
 @bp.route('/reports/gst-summary', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Accountant'])
 def gst_summary():
     """GST filing summary report"""
     form = DateRangeForm()
@@ -814,24 +1042,6 @@ def generate_challan_pdf(challan_id):
                    mimetype='application/pdf',
                    headers={'Content-Disposition': f'inline; filename=challan_{challan.challan_number}.pdf'})
 
-# ============ PRICING TIERS ============
-@bp.route('/settings/pricing-tiers', methods=['GET', 'POST'])
-def pricing_tiers():
-    """Manage pricing tiers"""
-    form = PricingTierForm()
-    
-    if form.validate_on_submit():
-        tier = PricingTier(
-            name=form.name.data,
-            discount_percentage=form.discount_percentage.data
-        )
-        db.session.add(tier)
-        db.session.commit()
-        flash(f'Pricing tier {form.name.data} created!', 'success')
-        return redirect(url_for('main.pricing_tiers'))
-    
-    tiers = PricingTier.query.all()
-    return render_template('pricing_tiers.html', form=form, tiers=tiers)
 
 # ============ HELPER FUNCTIONS FOR ACCOUNTING ============
 def create_invoice_journal_entry(invoice, subtotal):
@@ -976,6 +1186,8 @@ def service_dashboard():
 # In erp/routes.py
 
 @bp.route('/service/new', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Manager', 'Technician'])
 def add_service_record():
     form = UnifiedServiceForm()
     
@@ -1169,6 +1381,14 @@ def complete_booking(booking_id):
 
     return render_template('add_service_unified.html', form=form, title="Complete Job")
 
+@bp.route('/admin/audit-logs')
+@login_required
+@role_required(['Admin'])
+def audit_logs():
+    """View system audit logs"""
+    logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(500).all()
+    return render_template('audit_logs.html', logs=logs)
+
 @bp.route('/service/reminders')
 def service_reminders():
     """Show separate lists for 6-month and 1-year dues"""
@@ -1189,3 +1409,251 @@ def service_reminders():
     ).order_by(ServiceRecord.due_date_1yr.asc()).all()
 
     return render_template('service_reminders.html', list_6mo=list_6mo, list_1yr=list_1yr)
+# ============ CRM & SALES EXPANSION ============
+
+# --- LEAD MANAGEMENT ---
+@bp.route('/leads')
+def leads_list():
+    """List all potential customers"""
+    leads = Lead.query.order_by(Lead.created_at.desc()).all()
+    return render_template('leads_list.html', leads=leads)
+
+@bp.route('/add/lead', methods=['GET', 'POST'])
+@login_required
+def add_lead():
+    """Add new lead"""
+    form = LeadForm()
+    if form.validate_on_submit():
+        lead = Lead(
+            name=form.name.data,
+            business_name=form.business_name.data,
+            phone=form.phone.data,
+            email=form.email.data,
+            status=form.status.data,
+            notes=form.notes.data,
+            assigned_to_id=current_user.id
+        )
+        db.session.add(lead)
+        db.session.commit()
+        log_event("Created Lead", resource_type="Lead", details=f"Lead {lead.name} added by {current_user.username}")
+        flash('Lead added successfully!', 'success')
+        return redirect(url_for('main.leads_list'))
+    return render_template('_form_renderer.html', form=form, title="Add New Lead")
+
+@bp.route('/lead/<int:id>/convert')
+@login_required
+def convert_lead(id):
+    """Convert Lead to Customer"""
+    lead = Lead.query.get_or_404(id)
+    if lead.status == 'Converted':
+        flash('This lead is already converted!', 'warning')
+        return redirect(url_for('main.leads_list'))
+        
+    # Create Customer from Lead data
+    # Ensure name checks? For MVP trust uniqueness or user handles error
+    cust_name = lead.business_name if lead.business_name else lead.name
+    
+    customer = Customer(
+        name=cust_name,
+        phone=lead.phone,
+        # Default to first price list if exists, else None
+        price_list_id=PriceList.query.first().id if PriceList.query.first() else None 
+    )
+    
+    lead.status = 'Converted'
+    db.session.add(customer)
+    db.session.commit()
+    
+    log_event("Converted Lead", resource_type="Customer", details=f"Lead {lead.name} converted to Customer {customer.name}")
+    flash(f'Lead converted to Customer {customer.name}!', 'success')
+    return redirect(url_for('main.customers_list'))
+
+# --- PRICE LIST MANAGEMENT ---
+@bp.route('/price-lists')
+@login_required
+def price_lists():
+    """Manage price lists"""
+    lists = PriceList.query.all()
+    return render_template('price_lists.html', price_lists=lists)
+
+@bp.route('/add/price-list', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Manager'])
+def add_price_list():
+    """Create new price list"""
+    form = PriceListForm()
+    if form.validate_on_submit():
+        pl = PriceList(
+            name=form.name.data, 
+            description=form.description.data,
+            discount_percentage=form.discount_percentage.data
+        )
+        db.session.add(pl)
+        db.session.commit()
+        flash('Price List created!', 'success')
+        return redirect(url_for('main.price_lists'))
+    return render_template('_form_renderer.html', form=form, title="New Price List")
+
+# --- QUOTATION MANAGEMENT ---
+@bp.route('/quotations')
+@login_required
+def quotations_list():
+    """List all quotations"""
+    quotes = Quotation.query.order_by(Quotation.created_at.desc()).all()
+    return render_template('quotations_list.html', quotations=quotes)
+
+@bp.route('/quotation/new', methods=['GET', 'POST'])
+@login_required
+def create_quotation():
+    """Create new quotation"""
+    if request.method == 'POST':
+        try:
+            # Parse Customer/Lead ID (Format: C-123 or L-456)
+            entity_val = request.form.get('customer')
+            customer_id = None
+            lead_id = None
+            
+            if entity_val.startswith('C-'):
+                customer_id = int(entity_val.split('-')[1])
+            elif entity_val.startswith('L-'):
+                lead_id = int(entity_val.split('-')[1])
+            else:
+                flash('Please select a valid Customer or Lead', 'danger')
+                return redirect(url_for('main.create_quotation'))
+
+            # Generate Quote Number
+            last_quote = Quotation.query.order_by(Quotation.id.desc()).first()
+            quote_number = f"QT-{(last_quote.id + 1) if last_quote else 1:05d}"
+            
+            quotation = Quotation(
+                quote_number=quote_number,
+                valid_until=datetime.strptime(request.form.get('valid_until'), '%Y-%m-%d'),
+                customer_id=customer_id,
+                lead_id=lead_id,
+                status='Draft'
+            )
+            db.session.add(quotation)
+            db.session.flush() # Get ID
+            
+            # Parse Items
+            # Form data comes as items[0][product_id], items[0][quantity], etc.
+            # We need to restructure this.
+            items_data = {}
+            for key, value in request.form.items():
+                if key.startswith('items['):
+                    # Extract index and field: items[0][product_id] -> 0, product_id
+                    parts = key.replace(']', '').split('[')
+                    index = int(parts[1])
+                    field = parts[2]
+                    
+                    if index not in items_data:
+                        items_data[index] = {}
+                    items_data[index][field] = value
+            
+            grand_total = 0
+            for idx, item in items_data.items():
+                qty = int(item['quantity'])
+                price = float(item['price'])
+                line_total = qty * price
+                grand_total += line_total
+                
+                q_item = QuotationItem(
+                    quotation_id=quotation.id,
+                    product_id=int(item['product_id']),
+                    quantity=qty,
+                    unit_price=price,
+                    total=line_total
+                )
+                db.session.add(q_item)
+            
+            quotation.subtotal = grand_total
+            quotation.total_amount = grand_total
+            db.session.commit()
+            
+            log_event("Created Quotation", resource_type="Quotation", details=f"Quotation {quote_number} created. Total: {grand_total}")
+            flash(f'Quotation {quote_number} created successfully!', 'success')
+            return redirect(url_for('main.quotations_list'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error creating quotation: {str(e)}', 'danger')
+            return redirect(url_for('main.create_quotation'))
+
+    # GET Request
+    return render_template('create_quotation.html', 
+                         customers=Customer.query.all(), 
+                         leads=Lead.query.filter(Lead.status != 'Converted').all(),
+                         products=Product.query.order_by(Product.name).all(),
+                         today=date.today().strftime('%Y-%m-%d'))
+
+@bp.route('/price-list/<int:id>/manage', methods=['GET', 'POST'])
+@login_required
+@role_required(['Admin', 'Manager'])
+def manage_price_list(id):
+    """Manage custom prices for a specific price list"""
+    price_list = PriceList.query.get_or_404(id)
+    
+    if request.method == 'POST':
+        # Loop through form data to find price inputs
+        # Expected format: name="price_<product_id>", value="<float>"
+        count = 0
+        for key, value in request.form.items():
+            if key.startswith('price_') and value.strip():
+                try:
+                    product_id = int(key.split('_')[1])
+                    new_price = float(value)
+                    
+                    # Find existing item or create new
+                    item = PriceListItem.query.filter_by(
+                        price_list_id=id, 
+                        product_id=product_id
+                    ).first()
+                    
+                    if item:
+                        item.custom_price = new_price
+                    else:
+                        item = PriceListItem(
+                            price_list_id=id,
+                            product_id=product_id,
+                            custom_price=new_price
+                        )
+                        db.session.add(item)
+                    count += 1
+                except ValueError:
+                    continue
+        
+        db.session.commit()
+        flash(f'Updated {count} prices in {price_list.name}!', 'success')
+        return redirect(url_for('main.manage_price_list', id=id))
+
+    # GET request: Fetch all products and existing prices
+    products = Product.query.order_by(Product.name).all()
+    # Create a dictionary for easy lookup: {product_id: custom_price}
+    existing_items = {item.product_id: item.custom_price for item in price_list.items}
+    
+    return render_template('manage_price_list.html', 
+                         price_list=price_list, 
+                         products=products, 
+                         existing_prices=existing_items)
+
+@bp.route('/inventory/low-stock')
+@login_required
+def low_stock_alerts():
+    """Separate page for low stock alerts"""
+    low_stock_products = Product.query.filter(Product.stock <= Product.reorder_level).all()
+    return render_template('low_stock.html', low_stock=low_stock_products)
+
+@bp.route('/inventory/warehouse-distribution')
+@login_required
+def warehouse_distribution():
+    """Separate page for warehouse stock distribution"""
+    warehouses = Warehouse.query.all()
+    # Calculate stock data for template
+    for wh in warehouses:
+        # Assuming we can get total items via relationship or query
+        # For MVP, we'll sum the quantities from ProductStock if available, 
+        # or use a placeholder if the relationship isn't fully populated yet.
+        # Based on models.py, ProductStock links Product and Warehouse.
+        wh.total_stock = sum(s.quantity for s in wh.product_stocks)
+        
+    return render_template('warehouse_stock.html', warehouses=warehouses)

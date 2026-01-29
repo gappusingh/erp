@@ -1,17 +1,40 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, IntegerField, FloatField, SubmitField, SelectField, TextAreaField, DateField
+from wtforms import StringField, IntegerField, FloatField, SubmitField, SelectField, TextAreaField, DateField, PasswordField
 from wtforms.validators import DataRequired, NumberRange, Optional, Length
 
 
 class ProductForm(FlaskForm):
-    """Form for adding/editing products"""
+    """Form for adding/editing products with advanced inventory fields"""
     name = StringField('Product Name', validators=[DataRequired()])
     sku = StringField('SKU', validators=[DataRequired()])
     hsn_code = StringField('HSN Code', validators=[Optional()])
-    stock = IntegerField('Initial Stock', validators=[DataRequired(), NumberRange(min=0)])
+    category = SelectField('Category', coerce=int, validators=[Optional()])
+    
+    # Pricing
     purchase_price = FloatField('Purchase Price', validators=[DataRequired(), NumberRange(min=0)])
     sale_price = FloatField('Sale Price', validators=[DataRequired(), NumberRange(min=0)])
+    
+    # Inventory & UoM
+    uom_purchase = StringField('Purchase Unit (e.g. Carton)', default='Pcs', validators=[Optional()])
+    uom_sale = StringField('Sales Unit (e.g. Box)', default='Pcs', validators=[Optional()])
+    uom_conversion = IntegerField('Units in 1 Purchase Unit', default=1, validators=[Optional(), NumberRange(min=1)])
+    reorder_level = IntegerField('Reorder Level (Alert)', default=5, validators=[Optional(), NumberRange(min=0)])
+    
+    stock = IntegerField('Initial Stock (in Sales Units)', validators=[DataRequired(), NumberRange(min=0)])
+    
     submit = SubmitField('Save Product')
+
+class CategoryForm(FlaskForm):
+    """Form for adding/editing product categories"""
+    name = StringField('Category Name', validators=[DataRequired()])
+    description = TextAreaField('Description', validators=[Optional()])
+    submit = SubmitField('Save Category')
+
+class WarehouseForm(FlaskForm):
+    """Form for adding/editing warehouses"""
+    name = StringField('Warehouse Name', validators=[DataRequired()])
+    location = StringField('Location', validators=[Optional()])
+    submit = SubmitField('Save Warehouse')
 
 class CustomerForm(FlaskForm):
     """Form for adding/editing customers"""
@@ -20,8 +43,31 @@ class CustomerForm(FlaskForm):
     state_code = StringField('State Code (e.g., 10 for Bihar)', validators=[Optional()])
     address = TextAreaField('Address', validators=[Optional()])
     phone = StringField('Phone Number', validators=[Optional()])
-    pricing_tier = SelectField('Pricing Tier', coerce=int, validators=[Optional()])
+    price_list = SelectField('Price List', coerce=int, validators=[Optional()])
     submit = SubmitField('Save Customer')
+
+class LeadForm(FlaskForm):
+    """Form for tracking potential customers"""
+    name = StringField('Contact Name', validators=[DataRequired()])
+    business_name = StringField('Business Name (Optional)')
+    phone = StringField('Phone Number', validators=[DataRequired()])
+    email = StringField('Email', validators=[Optional()])
+    status = SelectField('Status', choices=[
+        ('New', 'New'),
+        ('Contacted', 'Contacted'),
+        ('Interested', 'Interested'),
+        ('Converted', 'Converted'),
+        ('Lost', 'Lost')
+    ], default='New')
+    notes = TextAreaField('Notes')
+    submit = SubmitField('Save Lead')
+    
+class PriceListForm(FlaskForm):
+    """Form for creating new price lists"""
+    name = StringField('List Name', validators=[DataRequired()])
+    description = StringField('Description')
+    discount_percentage = FloatField('Global Discount %', default=0.0, validators=[NumberRange(min=0, max=100)])
+    submit = SubmitField('Save Price List')
 
 class SupplierForm(FlaskForm):
     """Form for adding/editing suppliers"""
@@ -89,7 +135,7 @@ class DateRangeForm(FlaskForm):
     submit = SubmitField('Generate Report')
 
 
-   # Add at the bottom of forms.py
+    # Add at the bottom of forms.py
 
 class ServiceCustomerForm(FlaskForm):
     """Quick Add Form for Repair Customers"""
@@ -165,3 +211,10 @@ class BookingForm(FlaskForm):
     issue_reported = TextAreaField('Issue Reported', validators=[DataRequired()])
     
     submit = SubmitField('Book Appointment')
+
+
+class LoginForm(FlaskForm):
+    """Form for user login"""
+    username = StringField('Username', validators=[DataRequired()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    submit = SubmitField('Login')

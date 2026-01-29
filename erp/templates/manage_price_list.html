@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Prices - {{ price_list.name }}{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1">
+                <li class="breadcrumb-item"><a href="{{ url_for('main.price_lists') }}">Price Lists</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ price_list.name }}</li>
+            </ol>
+        </nav>
+        <h2><i class="bi bi-tag"></i> Manage Prices: {{ price_list.name }}</h2>
+        <p class="text-muted">{{ price_list.description }}</p>
+    </div>
+</div>
+
+<form method="POST">
+    <div class="card shadow-sm mb-5">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light sticky-top" style="z-index: 1;">
+                        <tr>
+                            <th style="width: 40%">Product</th>
+                            <th style="width: 15%">SKU</th>
+                            <th style="width: 15%" class="text-end">Base Price</th>
+                            <th style="width: 20%" class="text-end">List Price (₹)</th>
+                            <th style="width: 10%"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in products %}
+                        {% set custom = existing_prices.get(product.id) %}
+                        <tr class="{{ 'table-info' if custom else '' }}">
+                            <td>
+                                <strong>{{ product.name }}</strong>
+                            </td>
+                            <td><small class="text-muted">{{ product.sku }}</small></td>
+                            <td class="text-end text-muted">{{ "%.2f"|format(product.sale_price) }}</td>
+                            <td class="text-end">
+                                <input type="number" step="0.01" min="0" 
+                                       name="price_{{ product.id }}" 
+                                       class="form-control form-control-sm text-end {{ 'fw-bold border-primary' if custom else '' }}"
+                                       value="{{ custom if custom else '' }}" 
+                                       placeholder="Default">
+                            </td>
+                            <td class="text-muted small">
+                                {% if custom %}
+                                    {% set diff = custom - product.sale_price %}
+                                    {% if diff > 0 %}
+                                        <span class="text-success">+{{ "%.2f"|format(diff) }}</span>
+                                    {% elif diff < 0 %}
+                                        <span class="text-danger">{{ "%.2f"|format(diff) }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sticky Footer for Save Action -->
+    <div class="fixed-bottom bg-white border-top shadow p-3 d-flex justify-content-between align-items-center" style="left: 250px;"> <!-- Adjust left per sidebar width -->
+        <div class="text-muted small">
+            Saving updates all entered prices. Empty fields revert to base price logic (if implemented).
+        </div>
+        <div>
+            <a href="{{ url_for('main.price_lists') }}" class="btn btn-outline-secondary me-2">Cancel</a>
+            <button type="submit" class="btn btn-primary px-4">
+                <i class="bi bi-save"></i> Save Changes
+            </button>
+        </div>
+    </div>
+</form>
+
+{% endblock %}

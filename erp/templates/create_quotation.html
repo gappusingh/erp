@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}Create New Quotation{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4"><i class="bi bi-file-earmark-text"></i> Create Quotation</h2>
+        
+        <form id="quotationForm" method="POST">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Customer Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="customer" class="form-label">Customer / Lead</label>
+                            <select class="form-select" id="customer" name="customer" required>
+                                <option value="">Select Customer/Lead...</option>
+                                <optgroup label="Customers">
+                                    {% for customer in customers %}
+                                    <option value="C-{{ customer.id }}">{{ customer.name }}</option>
+                                    {% endfor %}
+                                </optgroup>
+                                <optgroup label="Leads">
+                                    {% for lead in leads %}
+                                    <option value="L-{{ lead.id }}">{{ lead.name }} ({{ lead.business_name if lead.business_name else 'Lead' }})</option>
+                                    {% endfor %}
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="date" class="form-label">Date</label>
+                            <input type="date" class="form-control" id="date" name="date" value="{{ today }}" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="valid_until" class="form-label">Valid Until</label>
+                            <input type="date" class="form-control" id="valid_until" name="valid_until" required>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Items</h5>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="addItemBtn">
+                        <i class="bi bi-plus-lg"></i> Add Item
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="itemsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 40%">Product</th>
+                                    <th style="width: 15%">Qty</th>
+                                    <th style="width: 20%">Unit Price (₹)</th>
+                                    <th style="width: 20%">Total (₹)</th>
+                                    <th style="width: 5%"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Rows will be added here by JS -->
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <td colspan="3" class="text-end fw-bold">Grand Total:</td>
+                                    <td class="fw-bold fs-5" id="grandTotal">₹0.00</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('main.quotations_list') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="bi bi-save"></i> Save Quotation
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Product Data for JS -->
+<script>
+    const products = [
+        {% for p in products %}
+        { "id": {{ p.id }}, "name": "{{ p.name }}", "price": {{ p.sale_price }} },
+        {% endfor %}
+    ];
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set default valid_until date (7 days from now)
+        const today = new Date();
+        const nextWeek = new Date(today);
+        nextWeek.setDate(today.getDate() + 7);
+        document.getElementById('valid_until').valueAsDate = nextWeek;
+
+        const tableBody = document.querySelector('#itemsTable tbody');
+        const grandTotalEl = document.getElementById('grandTotal');
+
+        function addRow() {
+            const rowCount = tableBody.rows.length;
+            const tr = document.createElement('tr');
+            
+            let options = '<option value="">Select Product...</option>';
+            products.forEach(p => {
+                options += `<option value="${p.id}" data-price="${p.price}">${p.name}</option>`;
+            });
+
+            tr.innerHTML = `
+                <td>
+                    <select class="form-select product-select" name="items[${rowCount}][product_id]" required>
+                        ${options}
+                    </select>
+                </td>
+                <td>
+                    <input type="number" class="form-control qty-input" name="items[${rowCount}][quantity]" value="1" min="1" required>
+                </td>
+                <td>
+                    <input type="number" class="form-control price-input" name="items[${rowCount}][price]" step="0.01" value="0.00" required>
+                </td>
+                <td class="row-total fw-bold">₹0.00</td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-row"><i class="bi bi-trash"></i></button>
+                </td>
+            `;
+            tableBody.appendChild(tr);
+            
+            // Re-bind events
+            bindRowEvents(tr);
+        }
+
+        function bindRowEvents(row) {
+            const select = row.querySelector('.product-select');
+            const qtyInput = row.querySelector('.qty-input');
+            const priceInput = row.querySelector('.price-input');
+            const removeBtn = row.querySelector('.remove-row');
+
+            select.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                const price = selectedOption.getAttribute('data-price');
+                if (price) {
+                    priceInput.value = parseFloat(price).toFixed(2);
+                }
+                updateRowTotal(row);
+            });
+
+            qtyInput.addEventListener('input', () => updateRowTotal(row));
+            priceInput.addEventListener('input', () => updateRowTotal(row)); // Allow manual override
+
+            removeBtn.addEventListener('click', function() {
+                if (tableBody.rows.length > 1) {
+                    row.remove();
+                    updateGrandTotal();
+                }
+            });
+        }
+
+        function updateRowTotal(row) {
+            const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
+            const price = parseFloat(row.querySelector('.price-input').value) || 0;
+            const total = qty * price;
+            
+            row.querySelector('.row-total').textContent = '₹' + total.toFixed(2);
+            updateGrandTotal();
+        }
+
+        function updateGrandTotal() {
+            let total = 0;
+            document.querySelectorAll('#itemsTable tbody tr').forEach(row => {
+                const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
+                const price = parseFloat(row.querySelector('.price-input').value) || 0;
+                total += qty * price;
+            });
+            grandTotalEl.textContent = '₹' + total.toFixed(2);
+        }
+
+        document.getElementById('addItemBtn').addEventListener('click', addRow);
+
+        // Add initial row
+        addRow();
+    });
+</script>
+{% endblock %}

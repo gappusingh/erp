@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Serial Numbers - {{ product.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2">{{ product.name }}</h1>
+            <p class="text-muted">Serial Number / Batch Tracking (SKU: {{ product.sku }})</p>
+        </div>
+        <div>
+            <a href="{{ url_for('main.add_serial', product_id=product.id) }}" class="btn btn-success">
+                <i class="fas fa-barcode me-2"></i>Add Serial Number
+            </a>
+            <a href="{{ url_for('main.products_list') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Inventory
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white font-weight-bold">Product Info</div>
+                <div class="card-body">
+                    <p><strong>Total Stock:</strong> {{ product.stock }} {{ product.uom_sale }}</p>
+                    <p><strong>Category:</strong> {{ product.category.name if product.category else 'N/A' }}</p>
+                    <p><strong>Tracked Serials:</strong> {{ serials|length }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Serial Number</th>
+                                    <th>Warehouse</th>
+                                    <th>Status</th>
+                                    <th>Added On</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for serial in serials %}
+                                <tr>
+                                    <td><code>{{ serial.serial_number }}</code></td>
+                                    <td>{{ serial.warehouse.name if serial.warehouse else 'Global' }}</td>
+                                    <td>
+                                        <span class="badge {% if serial.status == 'Available' %}bg-success{% elif serial.status == 'Sold' %}bg-info{% else %}bg-secondary{% endif %}">
+                                            {{ serial.status }}
+                                        </span>
+                                    </td>
+                                    <td><small>{{ serial.created_at.strftime('%Y-%m-%d') }}</small></td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center py-5">
+                                        <i class="fas fa-search display-4 text-muted mb-3 d-block"></i>
+                                        <p class="text-muted">No serial numbers tracked for this product yet.</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Add Serial Number{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-barcode me-2"></i> Add Serial Number for {{ product.name }}</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label class="form-label">Serial Number / Batch ID</label>
+                            <input type="text" name="serial_number" class="form-control" placeholder="Scan or type serial number" required autofocus>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Location (Warehouse)</label>
+                            <select name="warehouse_id" class="form-select">
+                                <option value="">Global / Unassigned</option>
+                                {% for wh in warehouses %}
+                                <option value="{{ wh.id }}">{{ wh.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success">Save Serial Number</button>
+                            <a href="{{ url_for('main.product_serials', product_id=product.id) }}" class="btn btn-outline-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer text-muted small">
+                    <i class="fas fa-info-circle me-1"></i> Use this to manually register existing stock or warranty items.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
