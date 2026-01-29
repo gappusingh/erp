@@ -122,11 +122,11 @@ def dashboard():
     # Calculate monthly order summary for each customer
     for customer in customers:
         orders_by_month = db.session.query(
-            func.strftime('%Y-%m', Invoice.created_at).label('month'),
+            func.to_char(Invoice.created_at, 'YYYY-MM').label('month'),
             func.count(Invoice.id).label('count')
         ).filter(Invoice.customer_id == customer.id
         ).group_by('month'
-        ).order_by(func.strftime('%Y-%m', Invoice.created_at).desc()
+        ).order_by(func.to_char(Invoice.created_at, 'YYYY-MM').desc()
         ).limit(6).all()
         
         customer.orders_summary = orders_by_month
