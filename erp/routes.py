@@ -107,10 +107,10 @@ def dashboard():
     
     # Financial metrics
     total_collections_today = db.session.query(func.sum(Payment.amount)).filter(
-        func.date(Payment.payment_date) == today).scalar() or 0.0
+        db.cast(Payment.payment_date, db.Date) == today).scalar() or 0.0
     
     total_credit_today = db.session.query(func.sum(Invoice.total_amount)).filter(
-        func.date(Invoice.created_at) == today).scalar() or 0.0
+        db.cast(Invoice.created_at, db.Date) == today).scalar() or 0.0
     
     total_market_due = db.session.query(func.sum(Customer.balance)).scalar() or 0.0
     
@@ -121,12 +121,17 @@ def dashboard():
     
     # Calculate monthly order summary for each customer
     for customer in customers:
+        if db.engine.name == 'sqlite':
+            month_expr = func.strftime('%Y-%m', Invoice.created_at)
+        else:
+            month_expr = func.to_char(Invoice.created_at, 'YYYY-MM')
+            
         orders_by_month = db.session.query(
-            func.to_char(Invoice.created_at, 'YYYY-MM').label('month'),
+            month_expr.label('month'),
             func.count(Invoice.id).label('count')
         ).filter(Invoice.customer_id == customer.id
         ).group_by('month'
-        ).order_by(func.to_char(Invoice.created_at, 'YYYY-MM').desc()
+        ).order_by(month_expr.desc()
         ).limit(6).all()
         
         customer.orders_summary = orders_by_month
