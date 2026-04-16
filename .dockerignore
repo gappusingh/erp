@@ -1,0 +1,14 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+instance/
+*.db
+*.sqlite3
+.env
+*.md
+migrate_to_postgres.py
+seed_data.py
+routes_backup.py
