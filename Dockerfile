@@ -23,8 +23,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Expose the port Railway uses
-ENV PORT=8080
-EXPOSE 8080
+# Expose the port for Coolify
+ENV PORT=3000
+EXPOSE 3000
 
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8080"]
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:3000"]
