@@ -114,5 +114,22 @@ def init_db():
 
 from erp import create_app
 
+
 if __name__ == '__main__':
     app.run(debug=True)
+else:
+    # Auto-initialize database on first run (for Coolify/production)
+    with app.app_context():
+        from sqlalchemy import inspect as sa_inspect
+        inspector = sa_inspect(db.engine)
+        if not inspector.has_table('user'):
+            print("🔧 First run detected — creating database tables...")
+            db.create_all()
+            # Seed default admin user
+            if not User.query.first():
+                admin = User(username='admin', role='Admin')
+                admin.set_password('password')
+                db.session.add(admin)
+                db.session.commit()
+                print("✅ Admin user created (admin/password)")
+            print("✅ Database initialized!")
